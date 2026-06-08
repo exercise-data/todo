@@ -1,253 +1,625 @@
+/* ===== 기본 리셋 & 변수 ===== */
 :root {
   --bg: #f4f5f7;
-  --surface: #ffffff;
-  --border: #e1e4e8;
-  --text: #2d2f33;
-  --muted: #6b7280;
-  --accent: #4f7cff;
-  --accent-hover: #3f6ae0;
+  --panel-bg: #ffffff;
+  --border: #e2e5ea;
+  --text: #1f2430;
+  --text-muted: #6b7280;
+  --primary: #3b6ef0;
+  --primary-hover: #2f5bd0;
+  --work: #3b6ef0;
+  --personal: #f0883b;
+  --study: #20a779;
+  --danger: #e5534b;
   --radius: 10px;
+  --gap: 16px;
+  --gantt-col: 34px;
+  --gantt-label: 150px;
+}
+
+.is-hidden {
+  display: none !important;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* 키보드 포커스 표시 (접근성) */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
+html,
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-  line-height: 1.5;
-}
-
-.app {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 24px 16px 48px;
-}
-
-.app__title {
-  font-size: 1.5rem;
-  margin: 8px 0 20px;
-  text-align: center;
-}
-
-/* 1) 입력 영역 */
-.input-area {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px;
-}
-
-.input-area__text {
-  flex: 1 1 200px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 1rem;
-}
-
-.input-area__category {
-  flex: 0 0 auto;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 1rem;
-  background: var(--surface);
-}
-
-.input-area__add {
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border: none;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.input-area__add:hover {
-  background: var(--accent-hover);
-}
-
-/* 2) 진행률 영역 */
-.progress-area {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 20px 0;
-}
-
-.progress-area__bar {
-  flex: 1 1 auto;
-  height: 12px;
-  background: var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.progress-area__fill {
-  width: 0%;
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-  transition: width 0.3s ease;
-}
-
-.progress-area__text {
-  flex: 0 0 auto;
-  min-width: 40px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-
-/* 3) 필터 탭 */
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.filters__tab {
-  flex: 1 1 auto;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-.filters__tab--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-/* 4) 할 일 목록 영역 */
-.todo-list-area {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  min-height: 120px;
-  padding: 8px;
-}
-
-.todo-list {
-  list-style: none;
   margin: 0;
   padding: 0;
 }
 
-/* 빈 상태 안내 */
-.todo-empty {
-  list-style: none;
-  text-align: center;
-  color: var(--muted);
-  padding: 32px 8px;
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic",
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
 }
 
-/* 할 일 항목 */
-.todo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 8px;
+/* ===== 헤더 & 카테고리 탭 ===== */
+.app-header {
+  background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
 }
 
-.todo:last-child {
-  border-bottom: none;
+.app-title {
+  margin: 0 0 12px;
+  font-size: 1.4rem;
 }
 
-.todo__check {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
+.category-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.92rem;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tab:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.tab.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ===== 레이아웃 (좌우 2단) ===== */
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: var(--gap);
+  padding: var(--gap);
+  align-items: start;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.panel-title {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+/* ===== 공통 폼 요소 ===== */
+.input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: #fff;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 110, 240, 0.15);
+}
+
+.btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
   cursor: pointer;
 }
 
-.todo__badge {
-  flex: 0 0 auto;
+.btn-add {
+  background: var(--primary);
+  color: #fff;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-add:hover {
+  background: var(--primary-hover);
+}
+
+/* ===== 프로젝트 패널 ===== */
+.project-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name name"
+    "category add";
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.project-name-input {
+  grid-area: name;
+}
+.project-category-select {
+  grid-area: category;
+}
+.project-form .btn-add {
+  grid-area: add;
+}
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.project-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.project-item:hover {
+  border-color: var(--primary);
+}
+
+.project-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.project-item.is-selected {
+  border-color: var(--primary);
+  background: rgba(59, 110, 240, 0.05);
+}
+
+.project-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.project-item-name {
+  font-weight: 600;
+  flex: 1;
+}
+
+/* 프로젝트 수정/삭제 버튼 */
+.project-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.icon-btn:hover {
+  background: #eceef2;
+}
+
+.icon-btn-danger:hover {
+  background: #fde8e8;
+}
+
+/* 인라인 수정 폼 */
+.project-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edit-name-input {
+  flex: 1 1 100%;
+}
+.edit-category-select {
+  flex: 1 1 auto;
+}
+
+.btn-cancel {
+  background: #eceef2;
+  color: var(--text);
+}
+.btn-cancel:hover {
+  background: #dfe2e8;
+}
+
+.badge {
+  font-size: 0.72rem;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 0.75rem;
   color: #fff;
   white-space: nowrap;
 }
 
-.todo__badge--work {
-  background: #4f7cff;
+.badge-work {
+  background: var(--work);
+}
+.badge-personal {
+  background: var(--personal);
+}
+.badge-study {
+  background: var(--study);
 }
 
-.todo__badge--personal {
-  background: #2bb673;
+/* 진도율 막대 */
+.progress-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
 }
 
-.todo__badge--study {
-  background: #f0883e;
+.progress {
+  height: 8px;
+  background: #eceef2;
+  border-radius: 999px;
+  overflow: hidden;
 }
 
-.todo__title {
-  flex: 1 1 auto;
-  min-width: 0;
-  word-break: break-word;
-  cursor: text;
+.progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  width: 0;
+  transition: width 0.25s ease;
 }
 
-.todo--done .todo__title {
-  text-decoration: line-through;
-  color: var(--muted);
+/* ===== 할 일 패널 ===== */
+.task-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 16px;
 }
 
-.todo__edit-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  font-size: 1rem;
+.task-title-input {
+  flex: 1 1 180px;
 }
 
-.todo__btn {
-  flex: 0 0 auto;
-  padding: 5px 10px;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.85rem;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.task-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
   cursor: pointer;
 }
 
-.todo__btn:hover {
-  background: var(--bg);
+.task-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
-.todo__delete:hover {
-  border-color: #e5484d;
-  color: #e5484d;
+/* 할 일 수정/삭제 버튼 */
+.task-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
 }
 
-@media (max-width: 480px) {
-  .input-area__add {
-    flex: 1 1 100%;
+/* 할 일 인라인 수정 폼 */
+.task-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+}
+.edit-task-title {
+  flex: 1 1 100%;
+}
+
+.task-title {
+  font-weight: 500;
+}
+
+.task-title.is-done {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.task-dates {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* 마감 임박/초과 배지 */
+.due-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.due-soon {
+  background: #fff3e0;
+  color: #c2670a;
+}
+
+.due-overdue {
+  background: #fde8e8;
+  color: #c62828;
+}
+
+/* 빈 상태 안내 문구 */
+.task-empty {
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 24px 12px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+/* ===== 보기 전환 탭 (목록 / 간트차트) ===== */
+.tasks-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.view-tabs {
+  display: flex;
+  gap: 4px;
+  background: #eceef2;
+  padding: 3px;
+  border-radius: 999px;
+}
+
+.view-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.view-tab.is-active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* ===== 간트차트 ===== */
+.gantt {
+  overflow-x: hidden; /* 가변폭 칸으로 항상 한 화면에 맞춤 */
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.gantt-grid {
+  display: grid;
+  width: 100%;
+}
+
+/* 모든 칸 공통: 가로 격자선 (세로선은 두지 않아 막대가 끊겨 보이지 않음) */
+.gantt-corner,
+.gantt-day-head,
+.gantt-rowlabel,
+.gantt-cell {
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 좌측 고정 라벨 열 */
+.gantt-corner,
+.gantt-rowlabel {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: var(--gantt-label);
+  border-right: 1px solid var(--border);
+}
+
+.gantt-corner {
+  font-weight: 600;
+  color: var(--text-muted);
+  background: #fafbfc;
+}
+
+/* 날짜 헤더 */
+.gantt-day-head {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 6px 0;
+  background: #fafbfc;
+  white-space: nowrap;
+  overflow: visible; /* 좁은 칸에서도 라벨이 잘리지 않게 (라벨은 띄엄띄엄) */
+}
+
+/* 본문 칸 */
+.gantt-cell {
+  height: 32px;
+}
+
+.gantt-rowlabel {
+  cursor: pointer;
+}
+.gantt-rowlabel:hover {
+  color: var(--primary);
+}
+
+/* 주말/공휴일 음영 (막대 뒤 배경) */
+.gantt-day-head.is-sat,
+.gantt-cell.is-sat {
+  background: rgba(59, 110, 240, 0.06);
+}
+.gantt-day-head.is-sun,
+.gantt-cell.is-sun,
+.gantt-day-head.is-holiday,
+.gantt-cell.is-holiday {
+  background: rgba(229, 83, 75, 0.09);
+}
+.gantt-day-head.is-sat {
+  color: var(--primary);
+}
+.gantt-day-head.is-sun,
+.gantt-day-head.is-holiday {
+  color: var(--danger);
+}
+
+/* 오늘은 주말/공휴일보다 우선 (소스 순서상 뒤에 위치) */
+.gantt-day-head.is-today {
+  color: var(--primary);
+  font-weight: 700;
+  background: rgba(59, 110, 240, 0.16);
+}
+.gantt-cell.is-today {
+  background: rgba(59, 110, 240, 0.1);
+}
+
+/* 막대 (기간) — 칸 안에 떠 있는 내부 요소, 세로 가운데 정렬 */
+.gantt-bar {
+  height: 14px;
+  margin-top: 9px;
+  cursor: pointer;
+}
+.gantt-bar.bar-active {
+  background-color: var(--primary);
+}
+.gantt-bar.bar-done {
+  background-color: var(--study);
+}
+.gantt-bar.bar-overdue {
+  background-color: var(--danger);
+}
+.gantt-bar.bar-start {
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+.gantt-bar.bar-end {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* 주말/공휴일 범례 */
+.gantt-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.gantt-legend .lg {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.gantt-legend .lg-sat {
+  background: rgba(59, 110, 240, 0.18);
+}
+.gantt-legend .lg-sun {
+  background: rgba(229, 83, 75, 0.22);
+}
+.gantt-legend .lg-today {
+  background: rgba(59, 110, 240, 0.4);
+}
+
+.gantt-note {
+  margin: 10px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* 간트 단위 선택기 */
+.gantt-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 10px 0;
+}
+
+.gantt-control-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.gantt-unit-select {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+
+.gantt-hint {
+  margin: 0;
+}
+
+/* ===== 반응형: 모바일에서 위아래로 쌓기 ===== */
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
   }
 }

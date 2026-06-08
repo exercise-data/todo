@@ -7,44 +7,74 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="app">
-    <h1 class="app__title">할 일 관리</h1>
-
-    <!-- 1) 입력 영역 -->
-    <section class="input-area">
-      <input
-        type="text"
-        id="todo-input"
-        class="input-area__text"
-        placeholder="할 일을 입력하세요"
-      />
-      <select id="category-select" class="input-area__category">
-        <option value="work">업무</option>
-        <option value="personal">개인</option>
-        <option value="study">공부</option>
-      </select>
-      <button type="button" id="add-btn" class="input-area__add">추가</button>
-    </section>
-
-    <!-- 2) 진행률 영역 -->
-    <section class="progress-area">
-      <div class="progress-area__bar">
-        <div class="progress-area__fill" id="progress-fill"></div>
-      </div>
-      <span class="progress-area__text" id="progress-text">0%</span>
-    </section>
-
-    <!-- 3) 필터 탭 -->
-    <nav class="filters" id="filters">
-      <button type="button" class="filters__tab filters__tab--active" data-filter="all">전체</button>
-      <button type="button" class="filters__tab" data-filter="work">업무</button>
-      <button type="button" class="filters__tab" data-filter="personal">개인</button>
-      <button type="button" class="filters__tab" data-filter="study">공부</button>
+  <header class="app-header">
+    <h1 class="app-title">할 일 관리</h1>
+    <!-- 1) 카테고리 필터 탭 -->
+    <nav class="category-tabs" aria-label="카테고리 필터">
+      <button class="tab is-active" data-category="all">전체</button>
+      <button class="tab" data-category="work">업무</button>
+      <button class="tab" data-category="personal">개인</button>
+      <button class="tab" data-category="study">공부</button>
     </nav>
+  </header>
 
-    <!-- 4) 할 일 목록 영역 -->
-    <section class="todo-list-area">
-      <ul class="todo-list" id="todo-list"></ul>
+  <main class="layout">
+    <!-- 2) 좌측: 프로젝트 패널 -->
+    <section class="panel projects-panel" aria-label="프로젝트">
+      <h2 class="panel-title">프로젝트</h2>
+
+      <form class="project-form" autocomplete="off">
+        <input
+          type="text"
+          class="input project-name-input"
+          placeholder="프로젝트 이름"
+          aria-label="프로젝트 이름"
+        />
+        <select class="input project-category-select" aria-label="카테고리 선택">
+          <option value="work">업무</option>
+          <option value="personal">개인</option>
+          <option value="study">공부</option>
+        </select>
+        <button type="submit" class="btn btn-add">추가</button>
+      </form>
+
+      <!-- 프로젝트 항목은 app.js의 renderProjects()가 채웁니다 -->
+      <ul class="project-list"></ul>
+    </section>
+
+    <!-- 3) 우측: 세부 할 일 패널 -->
+    <section class="panel tasks-panel" aria-label="할 일">
+      <div class="tasks-panel-head">
+        <h2 class="panel-title">세부 할 일 — <span class="tasks-project-name">선택된 프로젝트 없음</span></h2>
+        <div class="view-tabs" role="tablist" aria-label="보기 전환">
+          <button class="view-tab is-active" data-view="list">목록</button>
+          <button class="view-tab" data-view="gantt">간트차트</button>
+        </div>
+      </div>
+
+      <form class="task-form" autocomplete="off">
+        <input
+          type="text"
+          class="input task-title-input"
+          placeholder="할 일 제목"
+          aria-label="할 일 제목"
+        />
+        <label class="field">
+          <span class="field-label">시작일</span>
+          <input type="date" class="input task-start-input" aria-label="시작일" />
+        </label>
+        <label class="field">
+          <span class="field-label">종료일</span>
+          <input type="date" class="input task-end-input" aria-label="종료일" />
+        </label>
+        <button type="submit" class="btn btn-add">추가</button>
+      </form>
+
+      <!-- 목록 보기: app.js의 renderTaskList()가 채웁니다 -->
+      <ul class="task-list"></ul>
+
+      <!-- 간트차트 보기: app.js의 renderGantt()가 채웁니다 -->
+      <div class="gantt is-hidden" aria-label="간트차트"></div>
     </section>
   </main>
 
