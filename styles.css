@@ -469,10 +469,10 @@ body {
   background: #fff;
   padding: 8px 10px;
   font-size: 0.82rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: var(--gantt-label);
+  /* 이름이 2~3줄 이상이어도 잘리지 않고 모두 보이도록 줄바꿈 허용 */
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
   border-right: 1px solid var(--border);
 }
 
@@ -480,6 +480,21 @@ body {
   font-weight: 600;
   color: var(--text-muted);
   background: #fafbfc;
+}
+
+/* 라벨 열 너비 조절 핸들 (모서리 셀 우측 경계에 위치) */
+.gantt-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+}
+.gantt-resizer:hover,
+.gantt-resizer:active {
+  background: rgba(59, 110, 240, 0.3);
 }
 
 /* 날짜 헤더 */
@@ -493,9 +508,9 @@ body {
   overflow: visible; /* 좁은 칸에서도 라벨이 잘리지 않게 (라벨은 띄엄띄엄) */
 }
 
-/* 본문 칸 */
+/* 본문 칸 — 라벨이 여러 줄이면 행 높이가 늘어나도록 최소 높이만 지정 */
 .gantt-cell {
-  height: 32px;
+  min-height: 32px;
 }
 
 .gantt-rowlabel {
@@ -615,6 +630,57 @@ body {
 
 .gantt-hint {
   margin: 0;
+}
+
+/* 기간 설정 버튼 / 표시 / 편집 폼 */
+.gantt-range-toggle {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+}
+
+.gantt-range-tag {
+  font-size: 0.8rem;
+  color: var(--text);
+  background: rgba(59, 110, 240, 0.08);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.gantt-range-reset {
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  padding: 2px 4px;
+}
+.gantt-range-reset:hover {
+  color: var(--primary-hover);
+}
+
+.gantt-range-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  padding-top: 4px;
+}
+
+.gantt-range-editor .field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gantt-range-editor .input {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+
+.gantt-range-editor .btn {
+  padding: 5px 14px;
 }
 
 /* ===== 반응형: 모바일에서 위아래로 쌓기 ===== */

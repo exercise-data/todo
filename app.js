@@ -12,6 +12,8 @@ const STORAGE_KEYS = {
   tasks: "daylist.tasks",
   selected: "daylist.selectedProjectId",
   ganttUnits: "daylist.ganttUnits",
+  ganttRanges: "daylist.ganttRanges",
+  ganttLabelWidths: "daylist.ganttLabelWidths",
 };
 
 // 메모리 보관용 배열
@@ -103,6 +105,57 @@ function loadGanttUnits() {
   }
 }
 
+// 프로젝트별 간트 표시 기간 맵 { [projectId]: { start, end } } 을 저장
+function saveGanttRanges() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.ganttRanges, JSON.stringify(ganttRanges));
+  } catch (err) {
+    console.error("saveGanttRanges() 실패:", err);
+  }
+}
+
+// 간트 표시 기간 맵을 복원. 없거나 손상되면 빈 객체.
+function loadGanttRanges() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.ganttRanges);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch (err) {
+    console.error("loadGanttRanges() 실패:", err);
+    return {};
+  }
+}
+
+// 프로젝트별 간트 라벨 열 너비 맵 { [projectId]: px } 을 저장
+function saveGanttLabelWidths() {
+  try {
+    localStorage.setItem(
+      STORAGE_KEYS.ganttLabelWidths,
+      JSON.stringify(ganttLabelWidths)
+    );
+  } catch (err) {
+    console.error("saveGanttLabelWidths() 실패:", err);
+  }
+}
+
+// 간트 라벨 열 너비 맵을 복원. 없거나 손상되면 빈 객체.
+function loadGanttLabelWidths() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.ganttLabelWidths);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch (err) {
+    console.error("loadGanttLabelWidths() 실패:", err);
+    return {};
+  }
+}
+
 // 단일 키를 안전하게 읽어 배열로 복원. 없거나 손상되면 빈 배열.
 function loadArray(key) {
   try {
@@ -168,10 +221,32 @@ const viewTabsEl = document.querySelector(".view-tabs");
 let taskView = "list"; // 우측 패널 보기 모드 ("list" | "gantt")
 // 프로젝트별 간트 축 단위 { [projectId]: "auto"|"day"|"week"|"month" } — 저장값 복원
 let ganttUnits = loadGanttUnits();
+// 프로젝트별 간트 표시 기간 { [projectId]: { start, end } } — 저장값 복원
+let ganttRanges = loadGanttRanges();
+// 프로젝트별 간트 라벨 열 너비(px) { [projectId]: number } — 저장값 복원
+let ganttLabelWidths = loadGanttLabelWidths();
+let ganttRangeOpen = false; // 간트 '기간 설정' 편집 폼 열림 여부 (UI 상태)
+
+// 라벨 열 너비 기본값/최소·최대 (px)
+const DEFAULT_LABEL_WIDTH = 150;
+const MIN_LABEL_WIDTH = 90;
+const MAX_LABEL_WIDTH = 480;
 
 // 현재 선택된 프로젝트의 축 단위 (없으면 "auto")
 function getGanttUnit() {
   return ganttUnits[selectedProjectId] || "auto";
+}
+
+// 현재 선택된 프로젝트의 표시 기간 (없으면 null = 전체 보기)
+function getGanttRange() {
+  const r = ganttRanges[selectedProjectId];
+  return r && r.start && r.end ? r : null;
+}
+
+// 현재 선택된 프로젝트의 라벨 열 너비 (없으면 기본값)
+function getGanttLabelWidth() {
+  const w = ganttLabelWidths[selectedProjectId];
+  return typeof w === "number" && w > 0 ? w : DEFAULT_LABEL_WIDTH;
 }
 
 // 프로젝트 목록 렌더링. 변경 시마다 호출.
@@ -354,6 +429,15 @@ function deleteProject(id) {
   if (id in ganttUnits) {
     delete ganttUnits[id];
     saveGanttUnits();
+  }
+  // 이 프로젝트의 표시 기간/라벨 너비 설정도 정리
+  if (id in ganttRanges) {
+    delete ganttRanges[id];
+    saveGanttRanges();
+  }
+  if (id in ganttLabelWidths) {
+    delete ganttLabelWidths[id];
+    saveGanttLabelWidths();
   }
 
   if (selectedProjectId === id) {
@@ -652,8 +736,11 @@ function ganttMessage(text) {
   return p;
 }
 
-// 간트 단위 선택기 + 안내. effectiveUnit은 실제 적용된 단위(자동 해석 결과).
-function buildGanttControls(effectiveUnit) {
+// 간트 단위 선택기 + 기간 설정 + 안내.
+//   effectiveUnit: 실제 적용된 단위(자동 해석 결과)
+//   dataRange:     할 일 데이터에서 도출한 { start, end } (편집 폼 기본값)
+//   activeRange:   현재 적용 중인 사용자 지정 기간 또는 null
+function buildGanttControls(effectiveUnit, dataRange, activeRange) {
   const wrap = document.createElement("div");
   wrap.className = "gantt-controls";
 
@@ -680,6 +767,13 @@ function buildGanttControls(effectiveUnit) {
   });
   label.append(select);
 
+  // 기간 설정 토글 버튼
+  const rangeBtn = document.createElement("button");
+  rangeBtn.type = "button";
+  rangeBtn.className = "btn btn-cancel gantt-range-toggle";
+  rangeBtn.setAttribute("aria-expanded", String(ganttRangeOpen));
+  rangeBtn.textContent = "기간 설정";
+
   const hint = document.createElement("span");
   hint.className = "gantt-note gantt-hint";
   hint.textContent =
@@ -687,7 +781,61 @@ function buildGanttControls(effectiveUnit) {
       ? `현재: ${UNIT_LABEL[effectiveUnit]} · 막대를 클릭하면 수정`
       : "막대를 클릭하면 수정";
 
-  wrap.append(label, hint);
+  wrap.append(label, rangeBtn, hint);
+
+  // 적용 중인 사용자 지정 기간 표시 + 전체 보기 복귀
+  if (activeRange) {
+    const tag = document.createElement("span");
+    tag.className = "gantt-range-tag";
+    tag.textContent = `표시 기간: ${activeRange.start} ~ ${activeRange.end}`;
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "gantt-range-reset";
+    resetBtn.textContent = "전체 보기";
+
+    wrap.append(tag, resetBtn);
+  }
+
+  // 기간 설정 편집 폼 (토글로 표시)
+  if (ganttRangeOpen) {
+    const editor = document.createElement("div");
+    editor.className = "gantt-range-editor";
+
+    const startWrap = document.createElement("label");
+    startWrap.className = "field-label";
+    startWrap.append("시작 ");
+    const startInput = document.createElement("input");
+    startInput.type = "date";
+    startInput.className = "input gantt-range-start";
+    startInput.setAttribute("aria-label", "표시 시작일");
+    startInput.value = (activeRange || dataRange).start;
+    startWrap.append(startInput);
+
+    const endWrap = document.createElement("label");
+    endWrap.className = "field-label";
+    endWrap.append("종료 ");
+    const endInput = document.createElement("input");
+    endInput.type = "date";
+    endInput.className = "input gantt-range-end";
+    endInput.setAttribute("aria-label", "표시 종료일");
+    endInput.value = (activeRange || dataRange).end;
+    endWrap.append(endInput);
+
+    const applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "btn btn-add gantt-range-apply";
+    applyBtn.textContent = "적용";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "btn btn-cancel gantt-range-cancel";
+    cancelBtn.textContent = "닫기";
+
+    editor.append(startWrap, endWrap, applyBtn, cancelBtn);
+    wrap.append(editor);
+  }
+
   return wrap;
 }
 
@@ -718,13 +866,24 @@ function renderGantt() {
   // 종료일 빠른 순 (목록 정렬과 동일 기준)
   dated.sort((a, b) => a.endDate.localeCompare(b.endDate));
 
-  // 전체 기간 범위 계산
-  let minStart = dated[0].startDate;
-  let maxEnd = dated[0].endDate;
+  // 데이터에서 도출한 전체 기간 범위 (기간 설정 폼의 기본값)
+  let dataMin = dated[0].startDate;
+  let dataMax = dated[0].endDate;
   dated.forEach((t) => {
-    if (t.startDate < minStart) minStart = t.startDate;
-    if (t.endDate > maxEnd) maxEnd = t.endDate;
+    if (t.startDate < dataMin) dataMin = t.startDate;
+    if (t.endDate > dataMax) dataMax = t.endDate;
   });
+
+  // 사용자가 지정한 표시 기간이 있으면 그 범위로, 없으면 데이터 전체 범위로.
+  const activeRange = getGanttRange();
+  const minStart = activeRange ? activeRange.start : dataMin;
+  const maxEnd = activeRange ? activeRange.end : dataMax;
+
+  // 표시 기간과 겹치는 할 일만 차트에 표시. 완전히 벗어난 항목은 제외.
+  const visibleTasks = dated.filter(
+    (t) => !(t.endDate < minStart || t.startDate > maxEnd)
+  );
+  const hiddenByRange = dated.length - visibleTasks.length;
 
   // 축 단위: 이 프로젝트에 저장된 값. "auto"면 기간 길이로 자동 선택.
   const selectedUnit = getGanttUnit();
@@ -734,21 +893,38 @@ function renderGantt() {
   const today = toYMD(new Date());
   const todayIdx = findPeriodIndex(periods, today);
 
-  // 단위 선택기 + 안내
-  ganttEl.append(buildGanttControls(unit));
+  // 단위 선택기 + 기간 설정 + 안내
+  ganttEl.append(
+    buildGanttControls(unit, { start: dataMin, end: dataMax }, activeRange)
+  );
+
+  // 지정 기간에 표시할 할 일이 하나도 없으면 안내 후 종료 (컨트롤은 위에 남김)
+  if (visibleTasks.length === 0) {
+    ganttEl.append(
+      ganttMessage("선택한 기간에 표시할 할 일이 없습니다. 기간을 조정하세요.")
+    );
+    return;
+  }
 
   const grid = document.createElement("div");
   grid.className = "gantt-grid";
-  // 가변폭(1fr): 칸이 패널 너비를 나눠 가져 항상 한 화면에 맞춤(가로 스크롤 없음)
+  // 라벨 열 너비는 프로젝트별 저장값(드래그로 조절). 칸은 가변폭(1fr)이라
+  // 라벨 너비를 늘리면 차트 폭이 자동으로 줄어 항상 한 화면에 맞음.
+  grid.style.setProperty("--gantt-label", `${getGanttLabelWidth()}px`);
   grid.style.gridTemplateColumns = `var(--gantt-label) repeat(${periods.length}, minmax(0, 1fr))`;
 
   // 칸이 많으면 라벨이 겹치므로 일정 간격으로만 표시 (최대 ~14개)
   const labelStep = Math.max(1, Math.ceil(periods.length / 14));
 
-  // 헤더 행: 모서리 + 기간 칸
+  // 헤더 행: 모서리 + 기간 칸. 모서리 우측에 라벨 너비 조절 핸들을 둠.
   const corner = document.createElement("div");
   corner.className = "gantt-corner";
   corner.textContent = "할 일";
+  const resizer = document.createElement("div");
+  resizer.className = "gantt-resizer";
+  resizer.title = "드래그하여 목록 이름 너비 조절";
+  resizer.setAttribute("aria-hidden", "true");
+  corner.append(resizer);
   grid.append(corner);
 
   periods.forEach((period, i) => {
@@ -771,8 +947,12 @@ function renderGantt() {
     grid.append(head);
   });
 
+  // 표시 기간의 양 끝 (막대 클램핑 기준)
+  const firstStart = periods[0].start;
+  const lastEnd = periods[periods.length - 1].end;
+
   // 각 할 일 행: 라벨 + 기간 칸(기간만큼 막대)
-  dated.forEach((task) => {
+  visibleTasks.forEach((task) => {
     const label = document.createElement("div");
     label.className = "gantt-rowlabel";
     label.textContent = task.title;
@@ -780,8 +960,14 @@ function renderGantt() {
     label.dataset.id = task.id; // 라벨 클릭으로도 수정
     grid.append(label);
 
-    const startIdx = findPeriodIndex(periods, task.startDate);
-    const endIdx = findPeriodIndex(periods, task.endDate);
+    // 표시 기간을 벗어나는 부분은 양 끝 칸으로 클램핑.
+    // (잘린 쪽은 둥근 끝 처리를 생략해 기간이 더 이어짐을 나타냄)
+    const startVisible = task.startDate >= firstStart;
+    const endVisible = task.endDate <= lastEnd;
+    const startIdx = startVisible ? findPeriodIndex(periods, task.startDate) : 0;
+    const endIdx = endVisible
+      ? findPeriodIndex(periods, task.endDate)
+      : periods.length - 1;
     const status = task.completed
       ? "done"
       : task.endDate < today
@@ -800,8 +986,8 @@ function renderGantt() {
       if (i >= startIdx && i <= endIdx) {
         const bar = document.createElement("div");
         bar.className = `gantt-bar bar-${status}`;
-        if (i === startIdx) bar.classList.add("bar-start");
-        if (i === endIdx) bar.classList.add("bar-end");
+        if (i === startIdx && startVisible) bar.classList.add("bar-start");
+        if (i === endIdx && endVisible) bar.classList.add("bar-end");
         bar.title = `${task.title}\n${task.startDate} ~ ${task.endDate}`;
         bar.dataset.id = task.id; // 막대 클릭으로 수정
         cell.append(bar);
@@ -821,6 +1007,14 @@ function renderGantt() {
       '<span class="lg lg-sun"></span>일·공휴일 ' +
       '<span class="lg lg-today"></span>오늘';
     ganttEl.append(legend);
+  }
+
+  if (hiddenByRange > 0) {
+    ganttEl.append(
+      ganttMessage(
+        `설정한 표시 기간을 벗어나 숨겨진 할 일 ${hiddenByRange}개가 있습니다.`
+      )
+    );
   }
 
   if (undated > 0) {
@@ -855,6 +1049,82 @@ ganttEl.addEventListener("change", (e) => {
   ganttUnits[selectedProjectId] = select.value;
   saveGanttUnits();
   renderGantt();
+});
+
+// 간트 '기간 설정' 컨트롤 처리 (토글/적용/닫기/전체 보기)
+ganttEl.addEventListener("click", (e) => {
+  if (!selectedProjectId) return;
+
+  if (e.target.closest(".gantt-range-toggle")) {
+    ganttRangeOpen = !ganttRangeOpen;
+    renderGantt();
+    return;
+  }
+  if (e.target.closest(".gantt-range-cancel")) {
+    ganttRangeOpen = false;
+    renderGantt();
+    return;
+  }
+  if (e.target.closest(".gantt-range-reset")) {
+    delete ganttRanges[selectedProjectId];
+    saveGanttRanges();
+    ganttRangeOpen = false;
+    renderGantt();
+    return;
+  }
+  if (e.target.closest(".gantt-range-apply")) {
+    const controls = e.target.closest(".gantt-controls");
+    const start = controls.querySelector(".gantt-range-start").value;
+    const end = controls.querySelector(".gantt-range-end").value;
+    if (!start || !end) {
+      alert("시작일과 종료일을 모두 입력하세요.");
+      return;
+    }
+    if (end < start) {
+      alert("종료일이 시작일보다 빠를 수 없습니다.");
+      return;
+    }
+    ganttRanges[selectedProjectId] = { start, end };
+    saveGanttRanges();
+    ganttRangeOpen = false;
+    renderGantt();
+    return;
+  }
+});
+
+// 라벨 열 너비 드래그 조절. 칸은 1fr이라 라벨 너비만 바꾸면 차트 폭이 자동 조정됨.
+ganttEl.addEventListener("mousedown", (e) => {
+  const handle = e.target.closest(".gantt-resizer");
+  if (!handle || !selectedProjectId) return;
+  e.preventDefault();
+
+  const grid = ganttEl.querySelector(".gantt-grid");
+  if (!grid) return;
+
+  const startX = e.clientX;
+  const startWidth = getGanttLabelWidth();
+  let width = startWidth;
+  document.body.style.cursor = "col-resize";
+  document.body.style.userSelect = "none";
+
+  const onMove = (ev) => {
+    width = Math.max(
+      MIN_LABEL_WIDTH,
+      Math.min(MAX_LABEL_WIDTH, startWidth + (ev.clientX - startX))
+    );
+    grid.style.setProperty("--gantt-label", `${width}px`);
+  };
+  const onUp = () => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    ganttLabelWidths[selectedProjectId] = width;
+    saveGanttLabelWidths();
+  };
+
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
 });
 
 // 간트차트 막대/라벨 클릭 → 목록 보기로 전환 후 해당 할 일 수정 폼 열기
