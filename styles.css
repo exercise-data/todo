@@ -37,6 +37,11 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
+  /* 화면 전체를 헤더 + 본문으로 분할하고, 본문(.layout) 안에서만 스크롤 */
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ===== 헤더 & 카테고리 탭 ===== */
@@ -44,6 +49,7 @@ body {
   background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
   padding: 16px 24px;
+  flex-shrink: 0; /* 헤더는 항상 고정 높이 */
 }
 
 .app-title {
@@ -85,7 +91,10 @@ body {
   grid-template-columns: 340px 1fr;
   gap: var(--gap);
   padding: var(--gap);
-  align-items: start;
+  align-items: stretch; /* 두 패널이 본문 높이를 꽉 채우도록 */
+  flex: 1; /* 헤더를 뺀 나머지 높이를 차지 */
+  min-height: 0; /* 그리드 자식의 내부 스크롤이 동작하도록 */
+  overflow: hidden;
 }
 
 .panel {
@@ -93,11 +102,24 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
+  /* 패널 내부를 세로 플렉스로: 제목/폼은 고정, 목록 영역만 스크롤 */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .panel-title {
   margin: 0 0 14px;
   font-size: 1.05rem;
+  flex-shrink: 0; /* 스크롤 영역 위에 고정 */
+}
+
+/* 제목/폼/탭은 줄어들지 않고 고정, 그 아래 목록만 스크롤 */
+.project-form,
+.task-form,
+.tasks-panel-head {
+  flex-shrink: 0;
 }
 
 /* ===== 공통 폼 요소 ===== */
@@ -163,6 +185,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 프로젝트가 많으면 이 영역만 세로 스크롤 */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .project-item {
@@ -318,6 +344,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 할 일이 많으면 이 영역만 세로 스크롤 */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .task-item {
@@ -442,8 +472,12 @@ body {
 /* ===== 간트차트 ===== */
 .gantt {
   overflow-x: hidden; /* 가변폭 칸으로 항상 한 화면에 맞춤 */
+  overflow-y: auto; /* 행이 많으면 이 영역만 세로 스크롤 */
   border: 1px solid var(--border);
   border-radius: 8px;
+  /* 할 일 목록과 동일하게 패널 안에서만 스크롤 */
+  flex: 1;
+  min-height: 0;
 }
 
 .gantt-grid {
@@ -685,7 +719,26 @@ body {
 
 /* ===== 반응형: 모바일에서 위아래로 쌓기 ===== */
 @media (max-width: 760px) {
+  /* 패널을 세로로 쌓을 때는 화면 전체가 스크롤되도록 고정 높이 해제 */
+  body {
+    height: auto;
+    overflow: visible;
+  }
+
   .layout {
     grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  /* 각 패널은 내용 높이만큼, 내부 개별 스크롤 대신 페이지 스크롤 사용 */
+  .panel {
+    overflow: visible;
+  }
+
+  .project-list,
+  .task-list,
+  .gantt {
+    overflow-y: visible;
+    flex: 0 1 auto;
   }
 }
