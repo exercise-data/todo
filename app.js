@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
   ganttUnits: "daylist.ganttUnits",
   ganttRanges: "daylist.ganttRanges",
   ganttLabelWidths: "daylist.ganttLabelWidths",
+  listRanges: "daylist.listRanges",
 };
 
 // 메모리 보관용 배열
@@ -156,6 +157,30 @@ function loadGanttLabelWidths() {
   }
 }
 
+// 프로젝트별 '목록' 표시 기간 맵 { [projectId]: { start, end } } 을 저장
+function saveListRanges() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.listRanges, JSON.stringify(listRanges));
+  } catch (err) {
+    console.error("saveListRanges() 실패:", err);
+  }
+}
+
+// '목록' 표시 기간 맵을 복원. 없거나 손상되면 빈 객체.
+function loadListRanges() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.listRanges);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch (err) {
+    console.error("loadListRanges() 실패:", err);
+    return {};
+  }
+}
+
 // 단일 키를 안전하게 읽어 배열로 복원. 없거나 손상되면 빈 배열.
 function loadArray(key) {
   try {
@@ -210,6 +235,7 @@ const projectNameInput = document.querySelector(".project-name-input");
 const projectCategorySelect = document.querySelector(".project-category-select");
 const categoryTabsEl = document.querySelector(".category-tabs");
 const taskListEl = document.querySelector(".task-list");
+const listToolbarEl = document.querySelector(".list-toolbar");
 const taskForm = document.querySelector(".task-form");
 const taskTitleInput = document.querySelector(".task-title-input");
 const taskStartInput = document.querySelector(".task-start-input");
@@ -226,6 +252,13 @@ let ganttRanges = loadGanttRanges();
 // 프로젝트별 간트 라벨 열 너비(px) { [projectId]: number } — 저장값 복원
 let ganttLabelWidths = loadGanttLabelWidths();
 let ganttRangeOpen = false; // 간트 '기간 설정' 편집 폼 열림 여부 (UI 상태)
+// 프로젝트별 '목록' 표시 기간 { [projectId]: { start, end } } — 저장값 복원
+let listRanges = loadListRanges();
+let listRangeOpen = false; // 목록 '기간 설정' 편집 폼 열림 여부 (UI 상태)
+
+// 내보내기 헤더에 쓰는, 마지막으로 렌더된 각 보기의 표시 기간 라벨
+let listRangeLabel = ""; // 목록 보기의 현재 표시 기간 텍스트
+let ganttRangeLabel = ""; // 간트 보기의 현재 표시 기간 텍스트
 
 // 라벨 열 너비 기본값/최소·최대 (px)
 const DEFAULT_LABEL_WIDTH = 150;
@@ -240,6 +273,12 @@ function getGanttUnit() {
 // 현재 선택된 프로젝트의 표시 기간 (없으면 null = 전체 보기)
 function getGanttRange() {
   const r = ganttRanges[selectedProjectId];
+  return r && r.start && r.end ? r : null;
+}
+
+// 현재 선택된 프로젝트의 '목록' 표시 기간 (없으면 null = 전체 보기)
+function getListRange() {
+  const r = listRanges[selectedProjectId];
   return r && r.start && r.end ? r : null;
 }
 
@@ -439,6 +478,10 @@ function deleteProject(id) {
     delete ganttLabelWidths[id];
     saveGanttLabelWidths();
   }
+  if (id in listRanges) {
+    delete listRanges[id];
+    saveListRanges();
+  }
 
   if (selectedProjectId === id) {
     selectedProjectId = null;
@@ -587,9 +630,6 @@ function pickUnit(minStart, maxEnd) {
   return "month";
 }
 
-// 단위 한글 라벨
-const UNIT_LABEL = { day: "일", week: "주", month: "월" };
-
 // 매년 날짜가 고정인 한국 양력 공휴일 (MM-DD).
 const FIXED_HOLIDAYS = {
   "01-01": "신정",
@@ -737,10 +777,9 @@ function ganttMessage(text) {
 }
 
 // 간트 단위 선택기 + 기간 설정 + 안내.
-//   effectiveUnit: 실제 적용된 단위(자동 해석 결과)
-//   dataRange:     할 일 데이터에서 도출한 { start, end } (편집 폼 기본값)
-//   activeRange:   현재 적용 중인 사용자 지정 기간 또는 null
-function buildGanttControls(effectiveUnit, dataRange, activeRange) {
+//   dataRange:   할 일 데이터에서 도출한 { start, end } (편집 폼 기본값)
+//   activeRange: 현재 적용 중인 사용자 지정 기간 또는 null
+function buildGanttControls(dataRange, activeRange) {
   const wrap = document.createElement("div");
   wrap.className = "gantt-controls";
 
@@ -776,12 +815,13 @@ function buildGanttControls(effectiveUnit, dataRange, activeRange) {
 
   const hint = document.createElement("span");
   hint.className = "gantt-note gantt-hint";
-  hint.textContent =
-    current === "auto"
-      ? `현재: ${UNIT_LABEL[effectiveUnit]} · 막대를 클릭하면 수정`
-      : "막대를 클릭하면 수정";
+  // 축 단위(자동/일/주/월)와 무관하게 동일한 안내 문구를 표시
+  hint.textContent = "할일 또는 막대를 클릭하면 수정 가능";
 
   wrap.append(label, rangeBtn, hint);
+
+  // 내보내기 버튼 (PNG / PDF)
+  wrap.append(buildExportButtons("gantt"));
 
   // 적용 중인 사용자 지정 기간 표시 + 전체 보기 복귀
   if (activeRange) {
@@ -879,6 +919,11 @@ function renderGantt() {
   const minStart = activeRange ? activeRange.start : dataMin;
   const maxEnd = activeRange ? activeRange.end : dataMax;
 
+  // 내보내기 헤더에 쓸 표시 기간 라벨 갱신
+  ganttRangeLabel = activeRange
+    ? `${activeRange.start} ~ ${activeRange.end}`
+    : `${minStart} ~ ${maxEnd}`;
+
   // 표시 기간과 겹치는 할 일만 차트에 표시. 완전히 벗어난 항목은 제외.
   const visibleTasks = dated.filter(
     (t) => !(t.endDate < minStart || t.startDate > maxEnd)
@@ -895,7 +940,7 @@ function renderGantt() {
 
   // 단위 선택기 + 기간 설정 + 안내
   ganttEl.append(
-    buildGanttControls(unit, { start: dataMin, end: dataMax }, activeRange)
+    buildGanttControls({ start: dataMin, end: dataMax }, activeRange)
   );
 
   // 지정 기간에 표시할 할 일이 하나도 없으면 안내 후 종료 (컨트롤은 위에 남김)
@@ -1033,6 +1078,7 @@ function setTaskView(view) {
     .querySelectorAll(".view-tab")
     .forEach((t) => t.classList.toggle("is-active", t.dataset.view === view));
   taskListEl.classList.toggle("is-hidden", view !== "list");
+  listToolbarEl.classList.toggle("is-hidden", view !== "list");
   ganttEl.classList.toggle("is-hidden", view !== "gantt");
 }
 
@@ -1051,9 +1097,15 @@ ganttEl.addEventListener("change", (e) => {
   renderGantt();
 });
 
-// 간트 '기간 설정' 컨트롤 처리 (토글/적용/닫기/전체 보기)
+// 간트 '기간 설정' 컨트롤 처리 (토글/적용/닫기/전체 보기) + 내보내기
 ganttEl.addEventListener("click", (e) => {
   if (!selectedProjectId) return;
+
+  const exportBtn = e.target.closest("[data-export]");
+  if (exportBtn) {
+    exportView("gantt", exportBtn.dataset.export);
+    return;
+  }
 
   if (e.target.closest(".gantt-range-toggle")) {
     ganttRangeOpen = !ganttRangeOpen;
@@ -1146,6 +1198,16 @@ ganttEl.addEventListener("click", (e) => {
   }
 });
 
+// 할 일이 표시 기간과 겹치는지 판정. range가 없으면 항상 표시.
+// 날짜가 하나라도 있으면 그것으로 겹침을 판정하고, 둘 다 없으면 기간 밖으로 간주.
+function taskInRange(task, range) {
+  if (!range) return true;
+  const s = task.startDate || task.endDate;
+  const e = task.endDate || task.startDate;
+  if (!s || !e) return false;
+  return !(e < range.start || s > range.end);
+}
+
 // 선택된 프로젝트의 할 일을 목록으로 렌더링 (목록 보기)
 function renderTaskList() {
   const project = projects.find((p) => p.id === selectedProjectId);
@@ -1153,10 +1215,14 @@ function renderTaskList() {
   // 헤더 프로젝트명 갱신
   tasksProjectNameEl.textContent = project ? project.name : "선택된 프로젝트 없음";
 
+  // 도구막대(기간 설정·내보내기) 갱신
+  renderListToolbar(project);
+
   taskListEl.innerHTML = "";
 
   // 선택된 프로젝트가 없으면 안내 문구
   if (!project) {
+    listRangeLabel = "";
     const empty = document.createElement("li");
     empty.className = "task-empty";
     empty.textContent = "왼쪽에서 프로젝트를 선택하세요.";
@@ -1165,7 +1231,7 @@ function renderTaskList() {
   }
 
   // 종료일 오름차순 정렬 (가장 빠른 마감이 위). 종료일 없는 항목은 맨 아래.
-  const visible = tasks
+  const all = tasks
     .filter((t) => t.projectId === selectedProjectId)
     .sort((a, b) => {
       if (!a.endDate && !b.endDate) return 0;
@@ -1174,10 +1240,28 @@ function renderTaskList() {
       return a.endDate.localeCompare(b.endDate); // YYYY-MM-DD 사전순=날짜순
     });
 
-  if (visible.length === 0) {
+  // 사용자가 지정한 표시 기간이 있으면 그 기간과 겹치는 할 일만 표시.
+  const activeRange = getListRange();
+  const visible = all.filter((t) => taskInRange(t, activeRange));
+  const hiddenByRange = all.length - visible.length;
+
+  // 내보내기 헤더에 쓸 표시 기간 라벨 갱신
+  listRangeLabel = activeRange
+    ? `${activeRange.start} ~ ${activeRange.end}`
+    : "전체 기간";
+
+  if (all.length === 0) {
     const empty = document.createElement("li");
     empty.className = "task-empty";
     empty.textContent = "아직 할 일이 없습니다. 위에서 추가하세요.";
+    taskListEl.append(empty);
+    return;
+  }
+
+  if (visible.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "task-empty";
+    empty.textContent = "선택한 기간에 표시할 할 일이 없습니다. 기간을 조정하세요.";
     taskListEl.append(empty);
     return;
   }
@@ -1237,6 +1321,138 @@ function renderTaskList() {
 
     taskListEl.append(li);
   });
+
+  if (hiddenByRange > 0) {
+    const note = document.createElement("li");
+    note.className = "list-note";
+    note.textContent = `설정한 표시 기간을 벗어나 숨겨진 할 일 ${hiddenByRange}개가 있습니다.`;
+    taskListEl.append(note);
+  }
+}
+
+// 목록 도구막대: 기간 설정(토글·편집·전체 보기) + 내보내기(PNG/PDF) 버튼.
+// 선택된 프로젝트가 없으면 비워 둔다.
+function renderListToolbar(project) {
+  listToolbarEl.innerHTML = "";
+  if (!project) return;
+
+  // 기간 설정 편집 폼의 기본값: 이 프로젝트 할 일의 전체 기간
+  const dated = tasks.filter(
+    (t) =>
+      t.projectId === project.id &&
+      t.startDate &&
+      t.endDate &&
+      t.endDate >= t.startDate
+  );
+  let dataRange = null;
+  if (dated.length > 0) {
+    let min = dated[0].startDate;
+    let max = dated[0].endDate;
+    dated.forEach((t) => {
+      if (t.startDate < min) min = t.startDate;
+      if (t.endDate > max) max = t.endDate;
+    });
+    dataRange = { start: min, end: max };
+  }
+  const activeRange = getListRange();
+  const fallback = activeRange ||
+    dataRange || { start: toYMD(new Date()), end: toYMD(new Date()) };
+
+  // 기간 설정 토글 버튼
+  const rangeBtn = document.createElement("button");
+  rangeBtn.type = "button";
+  rangeBtn.className = "btn btn-cancel list-range-toggle";
+  rangeBtn.setAttribute("aria-expanded", String(listRangeOpen));
+  rangeBtn.textContent = "기간 설정";
+  listToolbarEl.append(rangeBtn);
+
+  // 적용 중인 표시 기간 표시 + 전체 보기 복귀
+  if (activeRange) {
+    const tag = document.createElement("span");
+    tag.className = "gantt-range-tag";
+    tag.textContent = `표시 기간: ${activeRange.start} ~ ${activeRange.end}`;
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "gantt-range-reset list-range-reset";
+    resetBtn.textContent = "전체 보기";
+
+    listToolbarEl.append(tag, resetBtn);
+  }
+
+  // 내보내기 버튼 (PNG / PDF)
+  listToolbarEl.append(buildExportButtons("list"));
+
+  // 기간 설정 편집 폼 (토글로 표시)
+  if (listRangeOpen) {
+    listToolbarEl.append(buildRangeEditor(fallback, "list"));
+  }
+}
+
+// 내보내기 버튼 묶음: 라벨 + PNG + PDF. view는 "list" | "gantt".
+function buildExportButtons(view) {
+  const group = document.createElement("span");
+  group.className = "export-group";
+
+  const label = document.createElement("span");
+  label.className = "export-label";
+  label.textContent = "내보내기";
+
+  const png = document.createElement("button");
+  png.type = "button";
+  png.className = "btn btn-cancel export-btn";
+  png.dataset.export = "png";
+  png.dataset.exportView = view;
+  png.textContent = "PNG";
+
+  const pdf = document.createElement("button");
+  pdf.type = "button";
+  pdf.className = "btn btn-cancel export-btn";
+  pdf.dataset.export = "pdf";
+  pdf.dataset.exportView = view;
+  pdf.textContent = "PDF";
+
+  group.append(label, png, pdf);
+  return group;
+}
+
+// 시작·종료일 입력 + 적용/닫기 편집 폼. view별 클래스 접두사를 붙인다.
+function buildRangeEditor(defaults, view) {
+  const editor = document.createElement("div");
+  editor.className = "gantt-range-editor";
+
+  const startWrap = document.createElement("label");
+  startWrap.className = "field-label";
+  startWrap.append("시작 ");
+  const startInput = document.createElement("input");
+  startInput.type = "date";
+  startInput.className = `input ${view}-range-start`;
+  startInput.setAttribute("aria-label", "표시 시작일");
+  startInput.value = defaults.start;
+  startWrap.append(startInput);
+
+  const endWrap = document.createElement("label");
+  endWrap.className = "field-label";
+  endWrap.append("종료 ");
+  const endInput = document.createElement("input");
+  endInput.type = "date";
+  endInput.className = `input ${view}-range-end`;
+  endInput.setAttribute("aria-label", "표시 종료일");
+  endInput.value = defaults.end;
+  endWrap.append(endInput);
+
+  const applyBtn = document.createElement("button");
+  applyBtn.type = "button";
+  applyBtn.className = `btn btn-add ${view}-range-apply`;
+  applyBtn.textContent = "적용";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = `btn btn-cancel ${view}-range-cancel`;
+  cancelBtn.textContent = "닫기";
+
+  editor.append(startWrap, endWrap, applyBtn, cancelBtn);
+  return editor;
 }
 
 // 할 일 인라인 수정 폼: 제목 + 시작일 + 종료일 + 저장/취소
@@ -1390,6 +1606,342 @@ taskListEl.addEventListener("submit", (e) => {
   const item = form.closest(".task-item");
   applyTaskEdit(item.dataset.id, item);
 });
+
+// 목록 도구막대 처리 (기간 설정 토글/적용/닫기/전체 보기) + 내보내기
+listToolbarEl.addEventListener("click", (e) => {
+  const exportBtn = e.target.closest("[data-export]");
+  if (exportBtn) {
+    exportView("list", exportBtn.dataset.export);
+    return;
+  }
+
+  if (!selectedProjectId) return;
+
+  if (e.target.closest(".list-range-toggle")) {
+    listRangeOpen = !listRangeOpen;
+    renderTaskList();
+    return;
+  }
+  if (e.target.closest(".list-range-cancel")) {
+    listRangeOpen = false;
+    renderTaskList();
+    return;
+  }
+  if (e.target.closest(".list-range-reset")) {
+    delete listRanges[selectedProjectId];
+    saveListRanges();
+    listRangeOpen = false;
+    renderTaskList();
+    return;
+  }
+  if (e.target.closest(".list-range-apply")) {
+    const start = listToolbarEl.querySelector(".list-range-start").value;
+    const end = listToolbarEl.querySelector(".list-range-end").value;
+    if (!start || !end) {
+      alert("시작일과 종료일을 모두 입력하세요.");
+      return;
+    }
+    if (end < start) {
+      alert("종료일이 시작일보다 빠를 수 없습니다.");
+      return;
+    }
+    listRanges[selectedProjectId] = { start, end };
+    saveListRanges();
+    listRangeOpen = false;
+    renderTaskList();
+    return;
+  }
+});
+
+// =====================================================================
+// 내보내기: 현재 보기(목록/간트차트)를 PNG·PDF로 저장.
+//   외부 라이브러리 없이 브라우저 기본 API만 사용한다.
+//   - 화면을 그대로 복제 → 계산된 스타일을 인라인 → 흰 카드(제목·기간)로 감쌈
+//   - SVG <foreignObject>로 래스터화 → <canvas> → PNG
+//   - PDF는 캔버스를 JPEG로 인코딩해 최소 구조의 PDF에 그림 XObject로 삽입
+// =====================================================================
+
+const EXPORT_SCALE = 2; // 선명도를 위해 2배 해상도로 래스터화
+const EXPORT_PAD = 16; // 카드 내부 여백(px) — 최소화
+
+// 파일명에 쓸 수 없는 문자를 _ 로 치환
+function sanitizeFilename(name) {
+  return (name || "export").replace(/[\\/:*?"<>|]/g, "_").trim() || "export";
+}
+
+// 라이브 요소의 계산된 스타일을 같은 구조의 복제본에 인라인으로 복사.
+// 복제본은 cloneNode(true) 결과여서 라이브와 노드 순서가 1:1로 대응한다.
+function inlineStylesFromLive(liveRoot, cloneRoot) {
+  const liveEls = [liveRoot, ...liveRoot.querySelectorAll("*")];
+  const cloneEls = [cloneRoot, ...cloneRoot.querySelectorAll("*")];
+  const n = Math.min(liveEls.length, cloneEls.length);
+  for (let i = 0; i < n; i++) {
+    const cs = getComputedStyle(liveEls[i]);
+    let text = "";
+    for (let j = 0; j < cs.length; j++) {
+      const prop = cs[j];
+      text += `${prop}:${cs.getPropertyValue(prop)};`;
+    }
+    cloneEls[i].setAttribute("style", text);
+  }
+}
+
+// 보기 컨텐츠를 흰 카드로 감싼 내보내기용 DOM을 만든다.
+function buildExportCard(view, projectName, rangeLabel) {
+  let liveContainer;
+  if (view === "gantt") {
+    if (!ganttEl.querySelector(".gantt-grid")) return null;
+    liveContainer = ganttEl;
+  } else {
+    if (!taskListEl.querySelector(".task-item")) return null;
+    liveContainer = taskListEl;
+  }
+
+  // 현재 화면 너비를 기준으로 컨텐츠 너비 고정 (간트 1fr 칸이 찌그러지지 않도록)
+  const widthRef =
+    view === "gantt"
+      ? ganttEl.querySelector(".gantt-grid")
+      : taskListEl;
+  const contentWidth = Math.ceil(widthRef.getBoundingClientRect().width);
+
+  const clone = liveContainer.cloneNode(true);
+  inlineStylesFromLive(liveContainer, clone);
+
+  // 체크박스 완료 상태는 속성이 아닌 프로퍼티라 복제에 안 실림 → 직접 반영
+  if (view === "list") {
+    const liveChecks = liveContainer.querySelectorAll(".task-check");
+    const cloneChecks = clone.querySelectorAll(".task-check");
+    liveChecks.forEach((c, i) => {
+      if (!cloneChecks[i]) return;
+      if (c.checked) cloneChecks[i].setAttribute("checked", "checked");
+      else cloneChecks[i].removeAttribute("checked");
+    });
+  }
+
+  // 내보내기에 불필요한 요소 제거 (인라인 후에 제거해야 스타일 대응이 어긋나지 않음)
+  if (view === "gantt") {
+    clone
+      .querySelectorAll(".gantt-controls, .gantt-note, .gantt-resizer")
+      .forEach((el) => el.remove());
+  } else {
+    clone
+      .querySelectorAll(".task-actions, .list-note")
+      .forEach((el) => el.remove());
+  }
+
+  // 복제본 루트의 스크롤/높이 제약 해제 → 전체 내용이 잘리지 않고 펼쳐짐
+  clone.style.overflow = "visible";
+  clone.style.height = "auto";
+  clone.style.maxHeight = "none";
+  clone.style.flex = "none";
+  clone.style.border = "none";
+  clone.style.width = `${contentWidth}px`;
+  clone.style.margin = "8px auto 0"; // 가로 중앙 정렬
+  clone.classList.remove("is-hidden");
+
+  // 헤더: 제목(프로젝트명) + 기간
+  const header = document.createElement("div");
+  header.style.textAlign = "center";
+  header.style.color = "#1f2430";
+
+  const title = document.createElement("div");
+  title.style.fontSize = "18px";
+  title.style.fontWeight = "700";
+  title.textContent = projectName;
+
+  const period = document.createElement("div");
+  period.style.fontSize = "12px";
+  period.style.color = "#6b7280";
+  period.style.marginTop = "2px";
+  period.textContent = `기간: ${rangeLabel || "전체"}`;
+
+  header.append(title, period);
+
+  // 흰 카드 컨테이너 (내용이 곧 이미지 전체 → 상하좌우 중앙·여백 최소)
+  const card = document.createElement("div");
+  Object.assign(card.style, {
+    display: "inline-block",
+    boxSizing: "border-box",
+    background: "#ffffff",
+    padding: `${EXPORT_PAD}px`,
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif',
+  });
+  card.append(header, clone);
+  return card;
+}
+
+// 카드 DOM을 SVG <foreignObject>로 그려 캔버스로 래스터화. { canvas, cssW, cssH } 반환.
+function rasterizeCard(card) {
+  return new Promise((resolve, reject) => {
+    // 화면 밖에 잠시 붙여 레이아웃을 잡고 크기를 측정
+    card.style.position = "fixed";
+    card.style.left = "-100000px";
+    card.style.top = "0";
+    document.body.append(card);
+    const rect = card.getBoundingClientRect();
+    const cssW = Math.ceil(rect.width);
+    const cssH = Math.ceil(rect.height);
+    // 측정용 화면 밖 위치 지정을 해제하고 직렬화해야 한다.
+    // (이 스타일이 남으면 SVG 안에서 카드가 화면 밖으로 그려져 빈 이미지가 됨)
+    card.style.position = "";
+    card.style.left = "";
+    card.style.top = "";
+    const inner = new XMLSerializer().serializeToString(card);
+    document.body.removeChild(card);
+
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${cssW * EXPORT_SCALE}" ` +
+      `height="${cssH * EXPORT_SCALE}" viewBox="0 0 ${cssW} ${cssH}">` +
+      `<foreignObject x="0" y="0" width="${cssW}" height="${cssH}">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml">${inner}</div>` +
+      `</foreignObject></svg>`;
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = cssW * EXPORT_SCALE;
+      canvas.height = cssH * EXPORT_SCALE;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff"; // 배경 흰색
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      resolve({ canvas, cssW, cssH });
+    };
+    img.onerror = () => reject(new Error("이미지 변환에 실패했습니다."));
+    img.src =
+      "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+}
+
+// Blob을 파일로 다운로드
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// data URL의 base64 부분을 바이트 배열로 디코드
+function dataURLToBytes(dataURL) {
+  const bin = atob(dataURL.split(",")[1]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+// JPEG 한 장을 한 페이지에 채운 최소 구조의 PDF 바이트를 만든다.
+//   imgW/imgH: JPEG 픽셀 크기, cssW/cssH: 페이지 환산용 CSS 픽셀 크기
+function buildPdf(jpegBytes, imgW, imgH, cssW, cssH) {
+  // 96px/inch(화면) → 72pt/inch(PDF): 1px = 0.75pt. 물리적 크기를 합리적으로.
+  const pageW = +(cssW * 0.75).toFixed(2);
+  const pageH = +(cssH * 0.75).toFixed(2);
+
+  // 문자열을 latin1(1바이트/문자) 바이트로 — PDF 구조부는 모두 ASCII
+  const enc = (s) => {
+    const a = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 0xff;
+    return a;
+  };
+
+  const chunks = [];
+  let len = 0;
+  const offsets = {};
+  const push = (data) => {
+    const b = typeof data === "string" ? enc(data) : data;
+    chunks.push(b);
+    len += b.length;
+  };
+
+  push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+
+  offsets[1] = len;
+  push("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+  offsets[2] = len;
+  push("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+
+  offsets[3] = len;
+  push(
+    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] ` +
+      `/Contents 5 0 R /Resources << /XObject << /Im0 4 0 R >> >> >>\nendobj\n`
+  );
+
+  offsets[4] = len;
+  push(
+    `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${imgW} ` +
+      `/Height ${imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
+      `/Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`
+  );
+  push(jpegBytes);
+  push("\nendstream\nendobj\n");
+
+  const content = `q ${pageW} 0 0 ${pageH} 0 0 cm /Im0 Do Q`;
+  offsets[5] = len;
+  push(
+    `5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`
+  );
+
+  const xrefStart = len;
+  const count = 6; // 객체 0..5
+  let xref = `xref\n0 ${count}\n0000000000 65535 f \n`;
+  for (let i = 1; i < count; i++) {
+    xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+  }
+  push(xref);
+  push(
+    `trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`
+  );
+
+  // 모든 청크를 하나의 바이트 배열로 합치기
+  const out = new Uint8Array(len);
+  let pos = 0;
+  for (const b of chunks) {
+    out.set(b, pos);
+    pos += b.length;
+  }
+  return out;
+}
+
+// 메인 진입점: 현재 보기를 format("png"|"pdf")으로 저장
+async function exportView(view, format) {
+  const project = projects.find((p) => p.id === selectedProjectId);
+  if (!project) {
+    alert("먼저 왼쪽에서 프로젝트를 선택하세요.");
+    return;
+  }
+
+  const rangeLabel = view === "gantt" ? ganttRangeLabel : listRangeLabel;
+  const card = buildExportCard(view, project.name, rangeLabel);
+  if (!card) {
+    alert("내보낼 내용이 없습니다.");
+    return;
+  }
+
+  const viewLabel = view === "gantt" ? "간트차트" : "목록";
+  const base = `${sanitizeFilename(project.name)}_${viewLabel}`;
+
+  try {
+    const { canvas, cssW, cssH } = await rasterizeCard(card);
+    if (format === "png") {
+      canvas.toBlob((blob) => {
+        if (blob) downloadBlob(blob, `${base}.png`);
+        else alert("PNG 생성에 실패했습니다.");
+      }, "image/png");
+    } else {
+      const jpeg = dataURLToBytes(canvas.toDataURL("image/jpeg", 0.95));
+      const pdf = buildPdf(jpeg, canvas.width, canvas.height, cssW, cssH);
+      downloadBlob(new Blob([pdf], { type: "application/pdf" }), `${base}.pdf`);
+    }
+  } catch (err) {
+    console.error("내보내기 실패:", err);
+    alert("내보내기에 실패했습니다. 브라우저 콘솔을 확인하세요.");
+  }
+}
 
 // 최초 렌더링
 renderProjects();

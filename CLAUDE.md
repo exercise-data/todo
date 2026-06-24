@@ -21,7 +21,7 @@ A Korean-language project & task manager ("할 일 관리") that runs entirely i
 - `tasks[]`: `{ id, projectId, title, startDate, endDate, completed, createdAt }` — dates are `"YYYY-MM-DD"` strings, sortable/comparable lexicographically (relied on throughout).
 - Tasks reference projects by `projectId`; deleting a project cascades to its tasks only.
 
-**Persistence layer** (`STORAGE_KEYS`, `save`/`load`/`loadArray`): four separate `localStorage` keys — bulk data (`projects`, `tasks`) is saved together via `save()`, while lightweight UI state (`selectedProjectId`, per-project gantt axis units) is persisted separately so selecting a project doesn't rewrite all data. All loads are defensive: corrupt/missing JSON falls back to empty.
+**Persistence layer** (`STORAGE_KEYS`, `save`/`load`/`loadArray`): several separate `localStorage` keys — bulk data (`projects`, `tasks`) is saved together via `save()`, while lightweight per-project UI state is persisted separately (each with its own save/load helper) so selecting a project doesn't rewrite all data: `selectedProjectId`, `ganttUnits` (axis unit), `ganttRanges`/`listRanges` (display period for the gantt / list views, `{ [projectId]: {start, end} }`), and `ganttLabelWidths` (label column px). All loads are defensive: corrupt/missing JSON falls back to empty.
 
 **UI state vs. data:** module-level `let` vars (`selectedProjectId`, `editingProjectId`, `editingTaskId`, `currentFilter`, `taskView`, `ganttUnits`) hold transient view state. Only `selectedProjectId` and `ganttUnits` are persisted.
 
@@ -30,6 +30,10 @@ A Korean-language project & task manager ("할 일 관리") that runs entirely i
 **Event handling:** delegated listeners on container elements (`.project-list`, `.task-list`, `.gantt`, tab bars), dispatching on `data-action` / `data-id` / `data-category` attributes set during render. Inline edit forms are rendered in place of an item when its id matches `editingProjectId`/`editingTaskId`.
 
 **Gantt chart** (`renderGantt` and helpers): builds a CSS-grid timeline. Axis unit (`day`/`week`/`month`) is either auto-picked from the total span (`pickUnit`) or forced per-project via `ganttUnits[projectId]`. `buildPeriods()` generates the columns; columns use `1fr` so everything fits one screen (no horizontal scroll). Only tasks with valid `startDate <= endDate` appear; others are counted and reported below the chart.
+
+**Display-period filter (both views):** the list and gantt each have their own per-project display period (`listRanges`/`ganttRanges`), set via a "기간 설정" control. Tasks are filtered to those overlapping the range (`taskInRange` for the list; inline overlap test in `renderGantt`); out-of-range counts are reported. `listRangeLabel`/`ganttRangeLabel` hold the last-rendered period text for the export header.
+
+**Export (PNG/PDF), zero-dependency** (`exportView` and helpers, bottom of `app.js`): clones the live list/gantt, copies computed styles inline (`inlineStylesFromLive`), wraps it in a white card with a centered header (title = project name, period = current display range), then rasterizes via an SVG `<foreignObject>` → `<img>` → `<canvas>` (`rasterizeCard`, 2× scale). PNG comes from `canvas.toBlob`; PDF is hand-assembled (`buildPdf`) embedding the canvas as a JPEG (`DCTDecode`) image XObject — no libraries. **Gotcha:** the card is positioned off-screen only to measure it; that positioning must be cleared before serializing or the SVG paints blank. **Note:** `foreignObject`-to-canvas works in Chromium/Firefox but is blank/tainted in Safari.
 
 **Korean holidays** (`FIXED_HOLIDAYS`, `LUNAR_HOLIDAYS`, `getYearHolidays`): day-unit gantt cells shade weekends and Korean public holidays. Solar holidays are fixed MM-DD; lunar holidays (설날/추석/부처님오신날) are hardcoded per year **2024–2030 only** — outside that range, lunar holidays silently don't render. Substitute-holiday (대체공휴일) rules are computed in `getYearHolidays`. If extending years, add entries to `LUNAR_HOLIDAYS`.
 

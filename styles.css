@@ -425,6 +425,50 @@ body {
   color: #c62828;
 }
 
+/* 목록 도구막대 (기간 설정 · 내보내기) */
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+.list-toolbar:empty {
+  display: none;
+}
+
+.list-range-toggle {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+}
+
+/* 기간 밖으로 숨겨진 할 일 안내 (목록 하단) */
+.list-note {
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 8px 4px;
+}
+
+/* 내보내기 버튼 묶음 */
+.export-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto; /* 도구막대 우측으로 밀기 */
+}
+
+.export-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.export-btn {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+}
+
 /* 빈 상태 안내 문구 */
 .task-empty {
   list-style: none;
