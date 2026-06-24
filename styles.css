@@ -629,9 +629,45 @@ body {
 
 /* 막대 (기간) — 칸 안에 떠 있는 내부 요소, 세로 가운데 정렬 */
 .gantt-bar {
+  position: relative;
   height: 14px;
   margin-top: 9px;
   cursor: pointer;
+}
+/* 드래그로 기간 변경이 가능한 막대: 가운데는 이동(grab) */
+.gantt-bar.is-draggable {
+  cursor: grab;
+}
+/* 양 끝 드래그 핸들: 좌=시작일, 우=종료일 변경 (좌우 크기 조절 커서) */
+.gantt-bar-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+.gantt-bar-handle.handle-start {
+  left: -1px;
+}
+.gantt-bar-handle.handle-end {
+  right: -1px;
+}
+/* 호버 시 끝 손잡이를 살짝 드러내 드래그 지점을 알림 */
+.gantt-bar.is-draggable:hover .gantt-bar-handle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 1px;
+}
+.gantt-bar.is-draggable:hover .handle-start::after {
+  left: 2px;
+}
+.gantt-bar.is-draggable:hover .handle-end::after {
+  right: 2px;
 }
 .gantt-bar.bar-active {
   background-color: var(--primary);

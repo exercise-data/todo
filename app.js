@@ -256,6 +256,12 @@ let ganttRangeOpen = false; // 간트 '기간 설정' 편집 폼 열림 여부 (
 let listRanges = loadListRanges();
 let listRangeOpen = false; // 목록 '기간 설정' 편집 폼 열림 여부 (UI 상태)
 
+// 간트 막대 드래그 상태 (UI 상태)
+let ganttPeriods = []; // 마지막 렌더의 축 기간 배열 (드래그 좌표→날짜 변환용)
+let ganttAxis = null; // 마지막 렌더의 축 범위 { start, end } (드래그 중 축 고정용)
+let ganttDragRange = null; // 드래그 중 축을 고정하는 임시 범위 (있으면 사용자 기간보다 우선)
+let ganttBarDraggedAt = 0; // 드래그/핸들 조작 종료 시각(ms). 직후 click(수정 폼 열림) 억제용
+
 // 내보내기 헤더에 쓰는, 마지막으로 렌더된 각 보기의 표시 기간 라벨
 let listRangeLabel = ""; // 목록 보기의 현재 표시 기간 텍스트
 let ganttRangeLabel = ""; // 간트 보기의 현재 표시 기간 텍스트
@@ -622,6 +628,13 @@ function dayDiff(start, end) {
   return Math.round((b - a) / 86400000);
 }
 
+// YMD에 n일을 더한 YMD (음수 가능)
+function addDays(ymd, n) {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return toYMD(d);
+}
+
 // 전체 기간 길이에 따라 축 단위를 자동 선택
 function pickUnit(minStart, maxEnd) {
   const span = dayDiff(minStart, maxEnd) + 1;
@@ -816,7 +829,7 @@ function buildGanttControls(dataRange, activeRange) {
   const hint = document.createElement("span");
   hint.className = "gantt-note gantt-hint";
   // 축 단위(자동/일/주/월)와 무관하게 동일한 안내 문구를 표시
-  hint.textContent = "할일 또는 막대를 클릭하면 수정 가능";
+  hint.textContent = "막대를 드래그해 기간 변경 · 클릭하면 수정";
 
   wrap.append(label, rangeBtn, hint);
 
@@ -915,14 +928,16 @@ function renderGantt() {
   });
 
   // 사용자가 지정한 표시 기간이 있으면 그 범위로, 없으면 데이터 전체 범위로.
-  const activeRange = getGanttRange();
-  const minStart = activeRange ? activeRange.start : dataMin;
-  const maxEnd = activeRange ? activeRange.end : dataMax;
+  // 단, 막대를 드래그하는 동안에는 축이 흔들리지 않도록 ganttDragRange로 고정한다.
+  const userRange = getGanttRange();
+  const axisRange = ganttDragRange || userRange;
+  const minStart = axisRange ? axisRange.start : dataMin;
+  const maxEnd = axisRange ? axisRange.end : dataMax;
 
-  // 내보내기 헤더에 쓸 표시 기간 라벨 갱신
-  ganttRangeLabel = activeRange
-    ? `${activeRange.start} ~ ${activeRange.end}`
-    : `${minStart} ~ ${maxEnd}`;
+  // 내보내기 헤더에 쓸 표시 기간 라벨 갱신 (드래그 임시 축은 라벨에 반영하지 않음)
+  ganttRangeLabel = userRange
+    ? `${userRange.start} ~ ${userRange.end}`
+    : `${dataMin} ~ ${dataMax}`;
 
   // 표시 기간과 겹치는 할 일만 차트에 표시. 완전히 벗어난 항목은 제외.
   const visibleTasks = dated.filter(
@@ -938,9 +953,13 @@ function renderGantt() {
   const today = toYMD(new Date());
   const todayIdx = findPeriodIndex(periods, today);
 
-  // 단위 선택기 + 기간 설정 + 안내
+  // 드래그(좌표→날짜 변환, 축 고정)에서 참조할 현재 축 정보 보관
+  ganttPeriods = periods;
+  ganttAxis = { start: minStart, end: maxEnd };
+
+  // 단위 선택기 + 기간 설정 + 안내 (드래그 임시 축이 아니라 사용자 지정 기간만 표시)
   ganttEl.append(
-    buildGanttControls({ start: dataMin, end: dataMax }, activeRange)
+    buildGanttControls({ start: dataMin, end: dataMax }, userRange)
   );
 
   // 지정 기간에 표시할 할 일이 하나도 없으면 안내 후 종료 (컨트롤은 위에 남김)
@@ -1031,10 +1050,27 @@ function renderGantt() {
       if (i >= startIdx && i <= endIdx) {
         const bar = document.createElement("div");
         bar.className = `gantt-bar bar-${status}`;
-        if (i === startIdx && startVisible) bar.classList.add("bar-start");
-        if (i === endIdx && endVisible) bar.classList.add("bar-end");
+        // 양 끝이 모두 화면 안일 때만 드래그 가능 (잘린 막대는 수정 폼으로)
+        const draggable = startVisible && endVisible;
+        if (draggable) bar.classList.add("is-draggable");
+        if (i === startIdx && startVisible) {
+          bar.classList.add("bar-start");
+          if (draggable) {
+            const h = document.createElement("div");
+            h.className = "gantt-bar-handle handle-start";
+            bar.append(h);
+          }
+        }
+        if (i === endIdx && endVisible) {
+          bar.classList.add("bar-end");
+          if (draggable) {
+            const h = document.createElement("div");
+            h.className = "gantt-bar-handle handle-end";
+            bar.append(h);
+          }
+        }
         bar.title = `${task.title}\n${task.startDate} ~ ${task.endDate}`;
-        bar.dataset.id = task.id; // 막대 클릭으로 수정
+        bar.dataset.id = task.id; // 막대 클릭으로 수정, 드래그로 기간 변경
         cell.append(bar);
       }
       grid.append(cell);
@@ -1179,8 +1215,117 @@ ganttEl.addEventListener("mousedown", (e) => {
   document.addEventListener("mouseup", onUp);
 });
 
+// 간트차트 막대 드래그로 기간(시작·종료일) 변경.
+//   - 막대 가운데를 끌면: 기간 길이를 유지한 채 이동 (시작·종료 동시 이동)
+//   - 좌측 핸들을 끌면: 시작일만 변경 / 우측 핸들을 끌면: 종료일만 변경
+// 날짜는 칸(축 단위) 경계에 맞춰 스냅된다. 드래그 중에는 축을 고정해 흔들림을 막는다.
+ganttEl.addEventListener("mousedown", (e) => {
+  const bar = e.target.closest(".gantt-bar.is-draggable");
+  if (!bar || !selectedProjectId) return;
+
+  const task = tasks.find((t) => t.id === bar.dataset.id);
+  if (!task) return;
+
+  const grid = ganttEl.querySelector(".gantt-grid");
+  const periods = ganttPeriods;
+  if (!grid || !periods.length || !ganttAxis) return;
+
+  // 잡은 위치에 따라 모드 결정: 좌/우 핸들이면 한쪽 끝만, 그 외는 전체 이동
+  let mode = "move";
+  if (e.target.closest(".handle-start")) mode = "start";
+  else if (e.target.closest(".handle-end")) mode = "end";
+
+  e.preventDefault();
+
+  // 헤더 칸의 픽셀 경계를 숫자로 캡처 (이후 재렌더와 무관하게 일정)
+  const bounds = [...grid.querySelectorAll(".gantt-day-head")].map((h) => {
+    const r = h.getBoundingClientRect();
+    return { left: r.left, right: r.right };
+  });
+  const n = bounds.length;
+  if (n !== periods.length) return;
+  const colAtX = (x) => {
+    if (x <= bounds[0].left) return 0;
+    if (x >= bounds[n - 1].right) return n - 1;
+    for (let i = 0; i < n; i++) {
+      if (x >= bounds[i].left && x < bounds[i].right) return i;
+    }
+    return n - 1;
+  };
+
+  const firstStart = periods[0].start;
+  const lastEnd = periods[n - 1].end;
+  const origStart = task.startDate;
+  const origEnd = task.endDate;
+  const grabCol = colAtX(e.clientX);
+
+  // 드래그 동안 축 고정 (데이터 변화로 칸이 늘거나 줄지 않도록)
+  ganttDragRange = ganttAxis;
+  let moved = false;
+  let lastS = origStart;
+  let lastE = origEnd;
+
+  document.body.style.cursor = mode === "move" ? "grabbing" : "ew-resize";
+  document.body.style.userSelect = "none";
+
+  const apply = (x) => {
+    const col = colAtX(x);
+    let ns = origStart;
+    let ne = origEnd;
+    if (mode === "move") {
+      // 잡은 칸 대비 이동량(일)을 계산해 기간 길이를 유지한 채 평행 이동
+      let delta = dayDiff(periods[grabCol].start, periods[col].start);
+      const fwd = dayDiff(origEnd, lastEnd); // 종료가 축 끝까지 갈 수 있는 여유(>=0)
+      const back = -dayDiff(firstStart, origStart); // 시작이 축 처음까지(<=0)
+      delta = Math.max(back, Math.min(fwd, delta));
+      ns = addDays(origStart, delta);
+      ne = addDays(origEnd, delta);
+    } else if (mode === "start") {
+      ns = periods[col].start;
+      if (ns > origEnd) ns = origEnd; // 시작이 종료를 넘지 않도록
+    } else {
+      ne = periods[col].end;
+      if (ne < origStart) ne = origStart; // 종료가 시작보다 앞서지 않도록
+    }
+    if (ns !== lastS || ne !== lastE) {
+      lastS = ns;
+      lastE = ne;
+      moved = true;
+      task.startDate = ns;
+      task.endDate = ne;
+      renderGantt(); // 칸 경계를 넘을 때만 호출됨 (값이 바뀐 경우)
+    }
+  };
+
+  const onMove = (ev) => apply(ev.clientX);
+  const onUp = () => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    ganttDragRange = null; // 축 고정 해제 (다음 렌더부터 정상 범위)
+    if (moved) {
+      ganttBarDraggedAt = Date.now(); // 뒤따르는 click(수정 폼 열기) 억제
+      save();
+      renderTasks(); // 막대 위치 확정 + 목록 보기도 갱신
+    } else if (mode !== "move") {
+      // 핸들을 눌렀다 떼기만 한 경우: 수정 폼은 열지 않음 (DOM은 그대로 둠)
+      ganttBarDraggedAt = Date.now();
+    }
+    // 가운데 단순 클릭(이동 없음): 아무것도 안 함 → 곧이어 click이 수정 폼을 연다
+  };
+
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+});
+
 // 간트차트 막대/라벨 클릭 → 목록 보기로 전환 후 해당 할 일 수정 폼 열기
 ganttEl.addEventListener("click", (e) => {
+  // 직전(350ms 이내)에 드래그/핸들 조작이 있었으면 이 클릭은 무시 (자동 만료)
+  if (ganttBarDraggedAt && Date.now() - ganttBarDraggedAt < 350) {
+    ganttBarDraggedAt = 0;
+    return;
+  }
   const target = e.target.closest("[data-id]");
   if (!target) return;
   const id = target.dataset.id;
@@ -1466,6 +1611,18 @@ function buildTaskEditForm(task) {
   titleInput.value = task.title;
   titleInput.setAttribute("aria-label", "할 일 제목 수정");
 
+  // 소속 프로젝트 변경 선택기: 전체 프로젝트 목록, 현재 소속을 기본 선택
+  const projectSelect = document.createElement("select");
+  projectSelect.className = "input edit-task-project";
+  projectSelect.setAttribute("aria-label", "소속 프로젝트 변경");
+  projects.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    if (p.id === task.projectId) opt.selected = true;
+    projectSelect.append(opt);
+  });
+
   const startInput = document.createElement("input");
   startInput.className = "input edit-task-start";
   startInput.type = "date";
@@ -1489,7 +1646,7 @@ function buildTaskEditForm(task) {
   cancelBtn.dataset.action = "cancel";
   cancelBtn.textContent = "취소";
 
-  form.append(titleInput, startInput, endInput, saveBtn, cancelBtn);
+  form.append(titleInput, projectSelect, startInput, endInput, saveBtn, cancelBtn);
   return form;
 }
 
@@ -1509,12 +1666,19 @@ function applyTaskEdit(id, li) {
     return;
   }
 
+  // 소속 프로젝트 변경: 선택값이 실제 프로젝트일 때만 반영
+  const newProjectId = li.querySelector(".edit-task-project")?.value;
+  if (newProjectId && projects.some((p) => p.id === newProjectId)) {
+    task.projectId = newProjectId;
+  }
+
   task.title = title;
   task.startDate = startDate;
   task.endDate = endDate;
   editingTaskId = null;
   save();
   renderTasks();
+  renderProjects(); // 소속 변경 시 양쪽 프로젝트 진도율 갱신
 }
 
 // 할 일 삭제 (FR-04): 확인 후 해당 항목만 제거
