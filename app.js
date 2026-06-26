@@ -2107,6 +2107,124 @@ async function exportView(view, format) {
   }
 }
 
+// =====================================================================
+// 8단계: 데이터 내보내기 / 가져오기 (PC 간 이동)
+//   localStorage는 PC·브라우저마다 따로 저장되므로, 다른 PC로 데이터를 옮기려면
+//   파일로 내보내고(백업) 가져오는(복원) 수단이 필요하다. 순수 브라우저 API만 사용.
+//   - 내보내기: projects/tasks를 하나의 JSON 객체로 묶어 파일로 다운로드
+//   - 가져오기: 파일을 읽어 형식 검증 → 확인 → 메모리 반영 → save() → 재렌더링
+//   주의: 가져오기는 기존 데이터를 덮어쓴다(병합 아님). 한 방향으로만 옮길 것.
+// =====================================================================
+
+const DATA_EXPORT_VERSION = 2; // 내보내기 형식 버전
+
+const dataExportBtn = document.querySelector(".data-export-btn");
+const dataImportBtn = document.querySelector(".data-import-btn");
+const dataImportInput = document.querySelector(".data-import-input");
+
+// 내보내기: 현재 projects/tasks를 하나의 JSON 파일로 다운로드.
+function exportData() {
+  try {
+    const payload = {
+      version: DATA_EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      projects,
+      tasks,
+    };
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    downloadBlob(blob, `backup-${toYMD(new Date())}.json`);
+  } catch (err) {
+    console.error("데이터 내보내기 실패:", err);
+    alert("데이터 내보내기에 실패했습니다. 브라우저 콘솔을 확인하세요.");
+  }
+}
+
+// 파싱된 객체가 가져오기에 쓸 수 있는 형식인지 검증.
+function isValidBackup(data) {
+  return (
+    data &&
+    typeof data === "object" &&
+    Array.isArray(data.projects) &&
+    Array.isArray(data.tasks)
+  );
+}
+
+// 가져오기: 선택한 JSON 파일을 읽어 검증 후, 확인을 거쳐 기존 데이터를 덮어쓴다.
+function importDataFromFile(file) {
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+
+      // 형식 검증: 형식이 안 맞으면 경고하고 중단(기존 데이터는 그대로 둔다).
+      if (!isValidBackup(data)) {
+        alert(
+          "올바른 백업 파일이 아닙니다. (projects·tasks 배열을 찾을 수 없습니다)\n" +
+            "기존 데이터는 그대로 유지됩니다."
+        );
+        return;
+      }
+
+      // 덮어쓰기 확인
+      const ok = confirm(
+        `기존 데이터를 덮어씁니다. 계속할까요?\n` +
+          `(프로젝트 ${data.projects.length}개 · 할 일 ${data.tasks.length}개를 가져옵니다)`
+      );
+      if (!ok) return;
+
+      // 메모리에 반영 후 저장
+      projects = data.projects;
+      tasks = data.tasks;
+      save();
+
+      // 가져온 데이터에 맞춰 UI 상태 정리(없어진 항목 참조 방지)
+      editingProjectId = null;
+      editingTaskId = null;
+      selectedProjectId = loadSelection(); // 기존 선택이 새 데이터에 없으면 null
+      saveSelection();
+
+      // 화면 재렌더링
+      renderProjects();
+      renderTasks();
+
+      alert("데이터를 가져왔습니다.");
+    } catch (err) {
+      console.error("데이터 가져오기 실패:", err);
+      alert(
+        "파일을 읽거나 해석하지 못했습니다. 손상되었거나 올바른 JSON이 아닙니다.\n" +
+          "기존 데이터는 그대로 유지됩니다."
+      );
+    }
+  };
+
+  reader.onerror = () => {
+    console.error("파일 읽기 실패:", reader.error);
+    alert("파일을 읽지 못했습니다. 기존 데이터는 그대로 유지됩니다.");
+  };
+
+  try {
+    reader.readAsText(file);
+  } catch (err) {
+    console.error("파일 읽기 시작 실패:", err);
+    alert("파일을 읽지 못했습니다. 기존 데이터는 그대로 유지됩니다.");
+  }
+}
+
+if (dataExportBtn) dataExportBtn.addEventListener("click", exportData);
+
+// 가져오기 버튼 → 숨겨진 파일 입력 열기
+if (dataImportBtn && dataImportInput) {
+  dataImportBtn.addEventListener("click", () => dataImportInput.click());
+  dataImportInput.addEventListener("change", () => {
+    const file = dataImportInput.files && dataImportInput.files[0];
+    if (file) importDataFromFile(file);
+    // 같은 파일을 연속으로 선택해도 change가 발생하도록 값 초기화
+    dataImportInput.value = "";
+  });
+}
+
 // 최초 렌더링
 renderProjects();
 renderTasks();

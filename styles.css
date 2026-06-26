@@ -52,9 +52,42 @@ body {
   flex-shrink: 0; /* 헤더는 항상 고정 높이 */
 }
 
-.app-title {
+/* 헤더 상단 행: 제목 좌측 + 데이터 백업·복원 도구 우측 */
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   margin: 0 0 12px;
+}
+
+.app-title {
+  margin: 0;
   font-size: 1.4rem;
+}
+
+/* 데이터 백업·복원 도구 (헤더 우측 정렬) */
+.data-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto; /* 우측 끝으로 밀착 */
+}
+
+/* 데이터 도구 버튼은 작게 */
+.data-tools .btn {
+  padding: 5px 10px;
+  font-size: 0.8rem;
+}
+
+.data-tools-hint {
+  flex-basis: 100%;
+  text-align: right;
+  font-size: 0.74rem;
+  color: var(--text-muted);
 }
 
 .category-tabs {
