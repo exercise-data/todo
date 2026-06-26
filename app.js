@@ -2,7 +2,7 @@
 // 화면 조작은 아직 연결하지 않습니다. 데이터 레이어만 구성합니다.
 //
 // 데이터 구조
-//   프로젝트:    { id, name, category("work"|"personal"|"study"), createdAt(ISO) }
+//   프로젝트:    { id, name, category("work"|"research"|"study"|"personal"), createdAt(ISO) }
 //   세부 할 일:  { id, projectId, title, startDate("YYYY-MM-DD"),
 //                  endDate("YYYY-MM-DD"), completed(bool), createdAt(ISO) }
 
@@ -210,20 +210,22 @@ load();
 // 카테고리 화면 표기 및 badge 클래스 매핑
 const CATEGORY_LABELS = {
   work: "업무",
-  personal: "개인",
+  research: "연구",
   study: "공부",
+  personal: "개인",
 };
 const CATEGORY_BADGE_CLASS = {
   work: "badge-work",
-  personal: "badge-personal",
+  research: "badge-research",
   study: "badge-study",
+  personal: "badge-personal",
 };
 
 // 화면 상태 (데이터가 아니라 UI 상태)
 let selectedProjectId = null; // 현재 선택된 프로젝트 id
 let editingProjectId = null; // 인라인 수정 중인 프로젝트 id
 let editingTaskId = null; // 인라인 수정 중인 할 일 id
-let currentFilter = "all"; // 현재 카테고리 필터 ("all" | "work" | "personal" | "study")
+let currentFilter = "all"; // 현재 카테고리 필터 ("all" | "work" | "research" | "study" | "personal")
 
 // 저장된 선택 상태 복원 (projects 로드 이후)
 selectedProjectId = loadSelection();
@@ -2108,32 +2110,42 @@ async function exportView(view, format) {
 }
 
 // =====================================================================
-// 8단계: 데이터 내보내기 / 가져오기 (PC 간 이동)
+// 8단계: 데이터 내보내기 / 가져오기 (PC 간 이동) — 구분(업무·연구·공부·개인)별 독립
 //   localStorage는 PC·브라우저마다 따로 저장되므로, 다른 PC로 데이터를 옮기려면
 //   파일로 내보내고(백업) 가져오는(복원) 수단이 필요하다. 순수 브라우저 API만 사용.
-//   - 내보내기: projects/tasks를 하나의 JSON 객체로 묶어 파일로 다운로드
-//   - 가져오기: 파일을 읽어 형식 검증 → 확인 → 메모리 반영 → save() → 재렌더링
-//   주의: 가져오기는 기존 데이터를 덮어쓴다(병합 아님). 한 방향으로만 옮길 것.
+//   - 내보내기: 한 구분(category)의 projects/tasks만 JSON 객체로 묶어 파일로 다운로드
+//   - 가져오기: 파일을 읽어 형식 검증 → 확인 → 해당 구분만 메모리 반영 → save() → 재렌더링
+//   주의: 가져오기는 그 구분의 기존 데이터만 덮어쓴다(병합 아님). 다른 구분은 보존된다.
 // =====================================================================
 
-const DATA_EXPORT_VERSION = 2; // 내보내기 형식 버전
+const DATA_EXPORT_VERSION = 3; // 내보내기 형식 버전 (3부터 구분별 백업)
 
-const dataExportBtn = document.querySelector(".data-export-btn");
-const dataImportBtn = document.querySelector(".data-import-btn");
+const dataToolsEl = document.querySelector(".data-tools");
+const dataCatSelect = document.querySelector(".data-cat-select");
 const dataImportInput = document.querySelector(".data-import-input");
+let importTargetCategory = null; // 가져오기 대상 구분 (파일 선택 대화상자 트리거 시 보관)
 
-// 내보내기: 현재 projects/tasks를 하나의 JSON 파일로 다운로드.
-function exportData() {
+// 한 구분의 projects/tasks만 추려 하나의 JSON 파일로 다운로드.
+function exportData(category) {
   try {
+    const catLabel = CATEGORY_LABELS[category] || category;
+    const catProjects = projects.filter((p) => p.category === category);
+    const ids = new Set(catProjects.map((p) => p.id));
+    const catTasks = tasks.filter((t) => ids.has(t.projectId));
+
     const payload = {
       version: DATA_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      projects,
-      tasks,
+      category,
+      projects: catProjects,
+      tasks: catTasks,
     };
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: "application/json" });
-    downloadBlob(blob, `backup-${toYMD(new Date())}.json`);
+    downloadBlob(
+      blob,
+      `backup-${sanitizeFilename(catLabel)}-${toYMD(new Date())}.json`
+    );
   } catch (err) {
     console.error("데이터 내보내기 실패:", err);
     alert("데이터 내보내기에 실패했습니다. 브라우저 콘솔을 확인하세요.");
@@ -2150,9 +2162,10 @@ function isValidBackup(data) {
   );
 }
 
-// 가져오기: 선택한 JSON 파일을 읽어 검증 후, 확인을 거쳐 기존 데이터를 덮어쓴다.
-function importDataFromFile(file) {
+// 가져오기: 선택한 JSON 파일을 읽어 검증 후, 확인을 거쳐 대상 구분의 데이터만 덮어쓴다.
+function importDataFromFile(file, targetCategory) {
   const reader = new FileReader();
+  const catLabel = CATEGORY_LABELS[targetCategory] || targetCategory;
 
   reader.onload = () => {
     try {
@@ -2167,29 +2180,73 @@ function importDataFromFile(file) {
         return;
       }
 
+      // 가져올 프로젝트 결정:
+      //  - 파일에 구분 정보가 있고 대상과 다르면 → 안내 후 대상 구분으로 변경(coerce)
+      //  - 구분 정보가 없으면(구버전 전체 백업) → 대상 구분의 프로젝트만 추림
+      let baseProjects;
+      if (data.category && data.category !== targetCategory) {
+        const srcLabel = CATEGORY_LABELS[data.category] || data.category;
+        const coerce = confirm(
+          `이 파일은 '${srcLabel}' 구분의 데이터입니다.\n` +
+            `'${catLabel}' 구분으로 가져오면 분류가 '${catLabel}'(으)로 변경됩니다. 계속할까요?`
+        );
+        if (!coerce) return;
+        baseProjects = data.projects;
+      } else if (data.category === targetCategory) {
+        baseProjects = data.projects;
+      } else {
+        // 구분 정보가 없는 백업: 해당 구분의 프로젝트만 선택
+        baseProjects = data.projects.filter((p) => p.category === targetCategory);
+      }
+
+      // 가져올 프로젝트에 속한 할 일만 추림 (원본 id 기준)
+      const baseIds = new Set(baseProjects.map((p) => p.id));
+      const baseTasks = data.tasks.filter((t) => baseIds.has(t.projectId));
+
       // 덮어쓰기 확인
       const ok = confirm(
-        `기존 데이터를 덮어씁니다. 계속할까요?\n` +
-          `(프로젝트 ${data.projects.length}개 · 할 일 ${data.tasks.length}개를 가져옵니다)`
+        `'${catLabel}' 구분의 기존 데이터를 덮어씁니다. 계속할까요?\n` +
+          `(프로젝트 ${baseProjects.length}개 · 할 일 ${baseTasks.length}개를 가져옵니다. ` +
+          `다른 구분은 영향받지 않습니다.)`
       );
       if (!ok) return;
 
-      // 메모리에 반영 후 저장
-      projects = data.projects;
-      tasks = data.tasks;
+      // id 재발급으로 다른 구분의 항목과 충돌 방지 + 구분을 대상으로 통일
+      const idMap = {};
+      const importProjects = baseProjects.map((p) => {
+        const newId = createId();
+        idMap[p.id] = newId;
+        return { ...p, id: newId, category: targetCategory };
+      });
+      const importTasks = baseTasks.map((t) => ({
+        ...t,
+        id: createId(),
+        projectId: idMap[t.projectId],
+      }));
+
+      // 대상 구분의 기존 프로젝트/할 일만 제거 후, 가져온 데이터 추가 (다른 구분 보존)
+      const removeIds = new Set(
+        projects.filter((p) => p.category === targetCategory).map((p) => p.id)
+      );
+      projects = projects
+        .filter((p) => p.category !== targetCategory)
+        .concat(importProjects);
+      tasks = tasks
+        .filter((t) => !removeIds.has(t.projectId))
+        .concat(importTasks);
       save();
 
-      // 가져온 데이터에 맞춰 UI 상태 정리(없어진 항목 참조 방지)
+      // UI 상태 정리(없어진 항목 참조 방지)
       editingProjectId = null;
       editingTaskId = null;
-      selectedProjectId = loadSelection(); // 기존 선택이 새 데이터에 없으면 null
+      selectedProjectId = loadSelection(); // 기존 선택이 사라졌으면 null
       saveSelection();
 
       // 화면 재렌더링
       renderProjects();
       renderTasks();
 
-      alert("데이터를 가져왔습니다.");
+      alert(`'${catLabel}' 데이터를 가져왔습니다.`);
     } catch (err) {
       console.error("데이터 가져오기 실패:", err);
       alert(
@@ -2212,16 +2269,29 @@ function importDataFromFile(file) {
   }
 }
 
-if (dataExportBtn) dataExportBtn.addEventListener("click", exportData);
+// 데이터 도구 클릭(위임): 드롭다운에서 고른 구분으로 내보내기 / 가져오기
+if (dataToolsEl && dataCatSelect && dataImportInput) {
+  dataToolsEl.addEventListener("click", (e) => {
+    const exportBtn = e.target.closest(".data-export-btn");
+    if (exportBtn) {
+      exportData(dataCatSelect.value);
+      return;
+    }
+    const importBtn = e.target.closest(".data-import-btn");
+    if (importBtn) {
+      importTargetCategory = dataCatSelect.value;
+      dataImportInput.click(); // 숨겨진 파일 입력 열기
+    }
+  });
 
-// 가져오기 버튼 → 숨겨진 파일 입력 열기
-if (dataImportBtn && dataImportInput) {
-  dataImportBtn.addEventListener("click", () => dataImportInput.click());
   dataImportInput.addEventListener("change", () => {
     const file = dataImportInput.files && dataImportInput.files[0];
-    if (file) importDataFromFile(file);
+    if (file && importTargetCategory) {
+      importDataFromFile(file, importTargetCategory);
+    }
     // 같은 파일을 연속으로 선택해도 change가 발생하도록 값 초기화
     dataImportInput.value = "";
+    importTargetCategory = null;
   });
 }
 

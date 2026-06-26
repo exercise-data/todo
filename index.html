@@ -10,21 +10,33 @@
   <header class="app-header">
     <div class="header-top">
       <h1 class="app-title">할 일 관리</h1>
-      <!-- 8단계) 데이터 백업·복원 (PC 간 이동) -->
+    </div>
+    <!-- 하단 행: 카테고리 필터 탭(좌) + 데이터 백업·복원 도구(우) -->
+    <div class="header-bottom">
+      <!-- 1) 카테고리 필터 탭 -->
+      <nav class="category-tabs" aria-label="카테고리 필터">
+        <button class="tab is-active" data-category="all">전체</button>
+        <button class="tab" data-category="work">업무</button>
+        <button class="tab" data-category="research">연구</button>
+        <button class="tab" data-category="study">공부</button>
+        <button class="tab" data-category="personal">개인</button>
+      </nav>
+      <!-- 8단계) 데이터 백업·복원 (PC 간 이동) — 구분(업무·연구·공부·개인) 선택 후 내보내기/가져오기 -->
       <div class="data-tools">
-        <button type="button" class="btn btn-cancel data-export-btn" title="현재 데이터를 JSON 파일로 내려받습니다">데이터 내보내기</button>
-        <button type="button" class="btn btn-cancel data-import-btn" title="JSON 백업 파일을 불러와 기존 데이터를 덮어씁니다">데이터 가져오기</button>
+        <div class="data-tools-row">
+          <select class="input data-cat-select" aria-label="데이터 구분 선택">
+            <option value="work">업무</option>
+            <option value="research">연구</option>
+            <option value="study">공부</option>
+            <option value="personal">개인</option>
+          </select>
+          <button type="button" class="btn btn-cancel data-export-btn" title="선택한 구분의 데이터를 JSON 파일로 내려받습니다">데이터 내보내기</button>
+          <button type="button" class="btn btn-cancel data-import-btn" title="JSON 백업 파일을 불러와 선택한 구분의 데이터를 덮어씁니다">데이터 가져오기</button>
+        </div>
         <input type="file" class="data-import-input is-hidden" accept=".json,application/json" aria-hidden="true" />
-        <span class="data-tools-hint">가져오기는 기존 데이터를 덮어씁니다. 최신 작업이 있는 PC에서 내보내 한 방향으로만 옮기세요.</span>
+        <span class="data-tools-hint">선택한 구분만 내보내고 가져옵니다. 가져오기는 그 구분의 기존 데이터만 덮어쓰며 다른 구분은 영향받지 않습니다.</span>
       </div>
     </div>
-    <!-- 1) 카테고리 필터 탭 -->
-    <nav class="category-tabs" aria-label="카테고리 필터">
-      <button class="tab is-active" data-category="all">전체</button>
-      <button class="tab" data-category="work">업무</button>
-      <button class="tab" data-category="personal">개인</button>
-      <button class="tab" data-category="study">공부</button>
-    </nav>
   </header>
 
   <main class="layout">
@@ -41,8 +53,9 @@
         />
         <select class="input project-category-select" aria-label="카테고리 선택">
           <option value="work">업무</option>
-          <option value="personal">개인</option>
+          <option value="research">연구</option>
           <option value="study">공부</option>
+          <option value="personal">개인</option>
         </select>
         <button type="submit" class="btn btn-add">추가</button>
       </form>
