@@ -6,103 +6,270 @@
   <title>할 일 관리</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-auth="out" data-view-mode="personal">
+  <!-- 1단계) 로그인 화면 (로그아웃 상태에서만 표시) -->
+  <div class="auth-screen">
+    <div class="auth-card">
+      <h1 class="auth-title">할 일 관리</h1>
+      <p class="auth-desc">계속하려면 Google 계정으로 로그인하세요.</p>
+      <button type="button" class="btn btn-google" id="login-btn">Google로 로그인</button>
+      <p class="auth-error" id="auth-error" role="alert"></p>
+    </div>
+  </div>
+
+  <!-- 앱 본체 (로그인 상태에서만 표시) -->
+  <div class="app-shell">
   <header class="app-header">
     <div class="header-top">
       <h1 class="app-title">할 일 관리</h1>
-    </div>
-    <!-- 하단 행: 카테고리 필터 탭(좌) + 데이터 백업·복원 도구(우) -->
-    <div class="header-bottom">
-      <!-- 1) 카테고리 필터 탭 -->
-      <nav class="category-tabs" aria-label="카테고리 필터">
-        <button class="tab is-active" data-category="all">전체</button>
-        <button class="tab" data-category="work">업무</button>
-        <button class="tab" data-category="research">연구</button>
-        <button class="tab" data-category="study">공부</button>
-        <button class="tab" data-category="personal">개인</button>
+      <!-- 상단 화면 전환: 개인용 / 팀 공용 (둘 다 Firestore) -->
+      <nav class="view-switch" role="tablist" aria-label="화면 전환">
+        <button type="button" class="vbtn is-active" data-mode="personal" role="tab" aria-selected="true">개인용</button>
+        <button type="button" class="vbtn" data-mode="team" role="tab" aria-selected="false">팀 공용</button>
       </nav>
-      <!-- 8단계) 데이터 백업·복원 (PC 간 이동) — 구분(업무·연구·공부·개인) 선택 후 내보내기/가져오기 -->
-      <div class="data-tools">
-        <div class="data-tools-row">
-          <select class="input data-cat-select" aria-label="데이터 구분 선택">
-            <option value="work">업무</option>
-            <option value="research">연구</option>
-            <option value="study">공부</option>
-            <option value="personal">개인</option>
-          </select>
-          <button type="button" class="btn btn-cancel data-export-btn" title="선택한 구분의 데이터를 JSON 파일로 내려받습니다">데이터 내보내기</button>
-          <button type="button" class="btn btn-cancel data-import-btn" title="JSON 백업 파일을 불러와 선택한 구분의 데이터를 덮어씁니다">데이터 가져오기</button>
+      <!-- 1단계) 로그인 사용자 표시: 이름 + UID(복사 가능) + 로그아웃 -->
+      <div class="auth-bar">
+        <div class="auth-user">
+          <span class="auth-name" id="auth-name"></span>
+          <span class="auth-uid-row">
+            UID: <code class="auth-uid" id="auth-uid"></code>
+            <button type="button" class="btn btn-cancel auth-copy-btn" id="copy-uid-btn" title="UID 복사">복사</button>
+          </span>
         </div>
-        <input type="file" class="data-import-input is-hidden" accept=".json,application/json" aria-hidden="true" />
-        <span class="data-tools-hint">선택한 구분만 내보내고 가져옵니다. 가져오기는 그 구분의 기존 데이터만 덮어쓰며 다른 구분은 영향받지 않습니다.</span>
+        <button type="button" class="btn btn-cancel" id="logout-btn">로그아웃</button>
       </div>
     </div>
   </header>
 
-  <main class="layout">
-    <!-- 2) 좌측: 프로젝트 패널 -->
-    <section class="panel projects-panel" aria-label="프로젝트">
-      <h2 class="panel-title">프로젝트</h2>
+  <!-- 참고) 기존 'localStorage 전용 프로젝트' 화면(app.js)은 제거했습니다.
+       그 기능 코드는 버리지 않고 _reference_old/ 와 (미로드 상태의) app.js 에 참고용으로 남겨,
+       이후 개인용/팀 공용으로 이식할 때 참조합니다. -->
 
-      <form class="project-form" autocomplete="off">
+  <!-- 개인 영역: 프로젝트 > 세부 할일 구조 (개인용 모드에서만 표시)
+       · 1단계: 개인 프로젝트 레이어(personalProjects). 세부 할일은 다음 단계. -->
+  <div class="personal-screen">
+    <!-- 좌측: 개인 프로젝트 패널 -->
+    <section class="panel pproj-panel" aria-label="개인 프로젝트">
+      <h2 class="panel-title">개인 프로젝트</h2>
+
+      <!-- 카테고리 필터 (전체/연구/강의/공부/일상) -->
+      <nav class="pproj-filter" aria-label="카테고리 필터">
+        <button type="button" class="tab is-active" data-pcat="all">전체</button>
+        <button type="button" class="tab" data-pcat="research">연구</button>
+        <button type="button" class="tab" data-pcat="lecture">강의</button>
+        <button type="button" class="tab" data-pcat="study">공부</button>
+        <button type="button" class="tab" data-pcat="daily">일상</button>
+      </nav>
+
+      <!-- 프로젝트 생성: 이름 + 카테고리 -->
+      <form class="pproj-form" autocomplete="off">
         <input
           type="text"
-          class="input project-name-input"
+          class="input pproj-name-input"
           placeholder="프로젝트 이름"
           aria-label="프로젝트 이름"
         />
-        <select class="input project-category-select" aria-label="카테고리 선택">
-          <option value="work">업무</option>
+        <select class="input pproj-cat-select" aria-label="카테고리 선택">
           <option value="research">연구</option>
+          <option value="lecture">강의</option>
           <option value="study">공부</option>
-          <option value="personal">개인</option>
+          <option value="daily">일상</option>
         </select>
         <button type="submit" class="btn btn-add">추가</button>
       </form>
 
-      <!-- 프로젝트 항목은 app.js의 renderProjects()가 채웁니다 -->
-      <ul class="project-list"></ul>
+      <!-- 입력 검증 / 동작 안내 메시지 -->
+      <p class="pproj-error" role="alert"></p>
+
+      <!-- 프로젝트 목록: personalProjects.js의 renderPersonalProjects()가 채웁니다 -->
+      <ul class="pproj-list"></ul>
     </section>
 
-    <!-- 3) 우측: 세부 할 일 패널 -->
-    <section class="panel tasks-panel" aria-label="할 일">
-      <div class="tasks-panel-head">
-        <h2 class="panel-title">세부 할 일 — <span class="tasks-project-name">선택된 프로젝트 없음</span></h2>
-        <div class="view-tabs" role="tablist" aria-label="보기 전환">
-          <button class="view-tab is-active" data-view="list">목록</button>
-          <button class="view-tab" data-view="gantt">간트차트</button>
+    <!-- 우측: 선택된 프로젝트의 세부 할 일 (personalTasks) -->
+    <section class="panel pproj-detail" aria-label="세부 할 일">
+      <div class="pproj-detail-head">
+        <h2 class="panel-title">
+          세부 할 일 — <span class="pproj-detail-name">선택된 프로젝트 없음</span>
+        </h2>
+        <!-- 보기 전환: 목록 / 간트차트 -->
+        <div class="ptask-viewtabs view-tabs" role="tablist" aria-label="보기 전환">
+          <button type="button" class="view-tab is-active" data-ptview="list" role="tab">목록</button>
+          <button type="button" class="view-tab" data-ptview="gantt" role="tab">간트</button>
         </div>
       </div>
 
-      <form class="task-form" autocomplete="off">
+      <!-- 프로젝트 미선택 시 안내 -->
+      <p class="pproj-detail-empty">왼쪽에서 프로젝트를 선택하세요.</p>
+
+      <!-- 할일 추가: 제목 + 시작일 + 종료일 (프로젝트 선택 시 표시) -->
+      <form class="ptask-form" autocomplete="off">
         <input
           type="text"
-          class="input task-title-input"
+          class="input ptask-title-input"
           placeholder="할 일 제목"
           aria-label="할 일 제목"
         />
         <label class="field">
           <span class="field-label">시작일</span>
-          <input type="date" class="input task-start-input" aria-label="시작일" />
+          <input type="date" class="input ptask-start-input" aria-label="시작일" />
         </label>
         <label class="field">
           <span class="field-label">종료일</span>
-          <input type="date" class="input task-end-input" aria-label="종료일" />
+          <input type="date" class="input ptask-end-input" aria-label="종료일" />
         </label>
         <button type="submit" class="btn btn-add">추가</button>
       </form>
 
-      <!-- 목록 보기 도구막대(기간 설정·내보내기): app.js의 renderListToolbar()가 채웁니다 -->
-      <div class="list-toolbar"></div>
+      <!-- 입력 검증 / 동작 안내 메시지 -->
+      <p class="ptask-error" role="alert"></p>
 
-      <!-- 목록 보기: app.js의 renderTaskList()가 채웁니다 -->
-      <ul class="task-list"></ul>
+      <!-- 목록 보기 도구막대(기간 설정): personalTasks.js의 renderListToolbar()가 채웁니다 -->
+      <div class="list-toolbar ptask-list-toolbar"></div>
 
-      <!-- 간트차트 보기: app.js의 renderGantt()가 채웁니다 -->
-      <div class="gantt is-hidden" aria-label="간트차트"></div>
+      <!-- 할일 목록: personalTasks.js의 renderPersonalTasks()가 채웁니다 -->
+      <ul class="task-list ptask-list"></ul>
+
+      <!-- 간트차트: personalTasks.js의 renderGantt()가 채웁니다 -->
+      <div class="ptask-gantt is-hidden" aria-label="간트차트"></div>
     </section>
-  </main>
+  </div>
 
-  <script src="app.js"></script>
+  <!-- 4단계) 팀 공용 영역: 개인과 동일한 "프로젝트 > 세부 할일 > 진도율 + 간트" 구조.
+       팀을 고르면 그 팀의 teamProjects/teamTasks 를 다룬다. (팀 공용 모드에서만 표시)
+       구조 클래스(pproj-*, ptask-*, task-item, ptg-*, progress)는 개인 영역과 공유하고,
+       팀 모듈은 DOM 조회를 .team-screen 루트로 한정해 개인 영역과 충돌하지 않는다. -->
+  <div class="team-screen">
+    <!-- 팀 선택 바 -->
+    <div class="team-select-bar">
+      <label class="field-label" for="team-select">팀 선택</label>
+      <select class="input team-select" id="team-select" aria-label="볼 팀 선택"></select>
+      <span class="team-select-hint">같은 팀 구성원과 프로젝트·할일을 실시간으로 공유합니다.</span>
+    </div>
+
+    <!-- 5단계) 팀 관리 영역 — 선택된 팀의 관리자(role=admin)에게만 보임.
+         teamAdmin.js 가 내 역할을 확인해 is-hidden 을 토글한다.
+         6단계 표시 변경) 제목 줄을 누르면 접기/펼치기(아코디언). 기본 접힘.
+         펼침/접힘 상태는 teamAdmin.js 가 localStorage 에 저장한다. -->
+    <section class="panel team-admin is-hidden" aria-label="팀 관리">
+      <!-- 제목 줄 = 접기/펼치기 토글 (role=button + aria-expanded + 키보드) -->
+      <h2
+        class="panel-title team-admin-toggle"
+        role="button"
+        tabindex="0"
+        aria-expanded="false"
+        aria-controls="team-admin-body"
+      >
+        <span class="team-admin-chevron" aria-hidden="true"></span>
+        팀 관리 <span class="team-admin-tag">관리자 전용</span>
+      </h2>
+
+      <!-- 접히는 본문: 펼쳤을 때만 표시 -->
+      <div class="team-admin-body" id="team-admin-body">
+        <!-- 팀원 추가: 대상 UID + 역할 -->
+        <form class="team-admin-form" autocomplete="off">
+          <input
+            type="text"
+            class="input ta-uid-input"
+            placeholder="추가할 사용자 UID"
+            aria-label="추가할 사용자 UID"
+          />
+          <select class="input ta-role-select" aria-label="역할 선택">
+            <option value="member">member</option>
+            <option value="admin">admin</option>
+          </select>
+          <button type="submit" class="btn btn-add">팀원 추가</button>
+        </form>
+        <p class="team-admin-hint">
+          대상자는 먼저 한 번 로그인해 자신의 UID를 알려준 상태여야 합니다.
+        </p>
+
+        <!-- 동작 안내 / 오류 -->
+        <p class="team-admin-error" role="alert"></p>
+
+        <!-- 팀원 목록: teamAdmin.js의 renderMembers()가 채웁니다 -->
+        <ul class="team-admin-list"></ul>
+      </div>
+    </section>
+
+    <!-- 2단: 팀 프로젝트(좌) + 세부 할일(우) -->
+    <div class="team-layout">
+      <!-- 좌측: 팀 프로젝트 패널 -->
+      <section class="panel pproj-panel" aria-label="팀 프로젝트">
+        <h2 class="panel-title">팀 프로젝트</h2>
+
+        <nav class="pproj-filter" aria-label="카테고리 필터">
+          <button type="button" class="tab is-active" data-pcat="all">전체</button>
+          <button type="button" class="tab" data-pcat="research">연구</button>
+          <button type="button" class="tab" data-pcat="work">업무</button>
+        </nav>
+
+        <form class="pproj-form" autocomplete="off">
+          <input
+            type="text"
+            class="input pproj-name-input"
+            placeholder="프로젝트 이름"
+            aria-label="프로젝트 이름"
+          />
+          <select class="input pproj-cat-select" aria-label="카테고리 선택">
+            <option value="research">연구</option>
+            <option value="work">업무</option>
+          </select>
+          <button type="submit" class="btn btn-add">추가</button>
+        </form>
+
+        <p class="pproj-error" role="alert"></p>
+        <ul class="pproj-list"></ul>
+      </section>
+
+      <!-- 우측: 선택된 팀 프로젝트의 세부 할 일 -->
+      <section class="panel pproj-detail" aria-label="세부 할 일">
+        <div class="pproj-detail-head">
+          <h2 class="panel-title">
+            세부 할 일 — <span class="pproj-detail-name">선택된 프로젝트 없음</span>
+          </h2>
+          <div class="ptask-viewtabs view-tabs" role="tablist" aria-label="보기 전환">
+            <button type="button" class="view-tab is-active" data-ptview="list" role="tab">목록</button>
+            <button type="button" class="view-tab" data-ptview="gantt" role="tab">간트</button>
+          </div>
+        </div>
+
+        <p class="pproj-detail-empty">왼쪽에서 프로젝트를 선택하세요.</p>
+
+        <form class="ptask-form" autocomplete="off">
+          <input
+            type="text"
+            class="input ptask-title-input"
+            placeholder="할 일 제목"
+            aria-label="할 일 제목"
+          />
+          <label class="field">
+            <span class="field-label">시작일</span>
+            <input type="date" class="input ptask-start-input" aria-label="시작일" />
+          </label>
+          <label class="field">
+            <span class="field-label">종료일</span>
+            <input type="date" class="input ptask-end-input" aria-label="종료일" />
+          </label>
+          <button type="submit" class="btn btn-add">추가</button>
+        </form>
+
+        <p class="ptask-error" role="alert"></p>
+
+        <!-- 목록 보기 도구막대(기간 설정): teamTasks.js의 renderListToolbar()가 채웁니다 -->
+        <div class="list-toolbar ptask-list-toolbar"></div>
+
+        <ul class="task-list ptask-list"></ul>
+        <div class="ptask-gantt is-hidden" aria-label="간트차트"></div>
+      </section>
+    </div>
+  </div>
+  </div><!-- /.app-shell -->
+
+  <script type="module" src="auth.js"></script>
+  <script type="module" src="personalProjects.js"></script>
+  <script type="module" src="personalTasks.js"></script>
+  <script type="module" src="teamProjects.js"></script>
+  <script type="module" src="teamTasks.js"></script>
+  <script type="module" src="teamAdmin.js"></script>
 </body>
 </html>

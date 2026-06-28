@@ -53,9 +53,123 @@ body {
   flex-shrink: 0; /* 헤더는 항상 고정 높이 */
 }
 
-/* 헤더 상단 행: 제목 */
+/* 헤더 상단 행: 제목(좌) + 로그인 사용자 정보(우) */
 .header-top {
   margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+/* ===== 1단계: 인증(로그인 화면 / 사용자 바) ===== */
+/* 로그아웃 상태: 앱 본체 숨김 / 로그인 상태: 로그인 화면 숨김 */
+body[data-auth="out"] .app-shell {
+  display: none;
+}
+body[data-auth="in"] .auth-screen {
+  display: none;
+}
+
+/* 앱 본체도 화면 분할 레이아웃을 유지 */
+.app-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 로그인 화면 (전체 화면 중앙 정렬) */
+.auth-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px 36px;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 8px 30px rgba(31, 36, 48, 0.08);
+}
+
+.auth-title {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+}
+
+.auth-desc {
+  margin: 0 0 24px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.auth-error {
+  margin: 16px 0 0;
+  color: var(--danger);
+  font-size: 0.82rem;
+  word-break: break-word;
+}
+
+/* Google 로그인 버튼 */
+.btn-google {
+  width: 100%;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.btn-google:hover {
+  background: var(--primary-hover);
+}
+
+/* 헤더의 로그인 사용자 바 */
+.auth-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1.3;
+}
+
+.auth-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.auth-uid-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.auth-uid {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 6px;
+  user-select: all;
+}
+
+.auth-copy-btn {
+  padding: 2px 8px;
+  font-size: 0.72rem;
 }
 
 /* 헤더 하단 행: 카테고리 필터 탭(좌) + 데이터 백업·복원 도구(우) */
@@ -850,6 +964,534 @@ body {
   padding: 5px 14px;
 }
 
+/* ===== 2·3단계: 화면 전환 (프로젝트 / 개인 할 일 / 팀 공용) ===== */
+.view-switch {
+  display: flex;
+  gap: 4px;
+  background: #eceef2;
+  padding: 3px;
+  border-radius: 999px;
+}
+
+.view-switch .vbtn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.view-switch .vbtn.is-active {
+  background: #fff;
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* 클라우드 화면(개인/팀)은 기본 숨김, 해당 모드에서만 표시 */
+.personal-screen,
+.team-screen {
+  display: none;
+}
+/* 개인/팀 모드: 해당 화면 표시 (둘 다 본문 높이를 채우는 세로 플렉스/그리드) */
+body[data-view-mode="personal"] .personal-screen {
+  display: grid;
+}
+body[data-view-mode="team"] .team-screen {
+  display: flex;
+}
+
+.personal-screen {
+  flex: 1;
+  min-height: 0;
+  margin: var(--gap);
+  grid-template-columns: 340px 1fr;
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+/* 팀 화면: 팀 선택 바(고정) + 2단 레이아웃(나머지 높이) */
+.team-screen {
+  flex: 1;
+  min-height: 0;
+  margin: var(--gap);
+  flex-direction: column;
+}
+
+.team-select-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: var(--gap);
+}
+.team-select {
+  width: auto;
+  min-width: 180px;
+  padding: 6px 10px;
+}
+.team-select-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 팀 2단 레이아웃 (개인 화면과 동일 비율) */
+.team-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+/* 5단계: 팀 관리 영역 (관리자에게만 표시, 선택 바와 레이아웃 사이) */
+.team-admin {
+  flex-shrink: 0;
+  margin-bottom: var(--gap);
+  /* .panel 의 세로 플렉스를 그대로 사용하되, 명단만 내부 스크롤 */
+}
+.team-admin .panel-title {
+  /* 여백은 아코디언 상태(.is-open)에 따라 .team-admin-toggle 규칙이 제어 */
+  margin-bottom: 0;
+}
+/* 아코디언 토글 제목 줄 */
+.team-admin-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0; /* 접힘 상태: 제목만 보이므로 아래 여백 없음 */
+}
+.team-admin-toggle:focus-visible {
+  outline: 2px solid var(--research);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+/* 방향 표시: 접힘 ▸ / 펼침 ▾ — 한눈에 보이도록 크게·또렷하게 */
+.team-admin-chevron {
+  display: inline-flex;
+  align-items: center; /* 제목 텍스트와 세로 가운데 정렬 */
+  justify-content: center;
+  width: 1.1em;
+}
+.team-admin-chevron::before {
+  content: "\25B8"; /* ▸ */
+  font-size: 1.25em;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--research);
+}
+.team-admin.is-open .team-admin-chevron::before {
+  content: "\25BE"; /* ▾ */
+}
+/* 본문은 펼쳤을 때만 표시 */
+.team-admin-body {
+  display: none;
+}
+.team-admin.is-open .team-admin-toggle {
+  margin-bottom: 12px;
+}
+.team-admin.is-open .team-admin-body {
+  display: block;
+}
+.team-admin-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--research);
+  background: rgba(139, 92, 246, 0.12);
+  border-radius: 999px;
+  padding: 2px 8px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.team-admin-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ta-uid-input {
+  flex: 1 1 280px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+.ta-role-select {
+  width: auto;
+  padding: 8px 10px;
+}
+.team-admin-hint {
+  margin: 0 0 10px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.team-admin-error {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  color: var(--danger);
+}
+.team-admin-error:empty {
+  display: none;
+}
+.team-admin-error.is-info {
+  color: var(--text-muted);
+}
+.team-admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+.ta-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.ta-member-uid {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.ta-you-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: rgba(59, 110, 240, 0.1);
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin-left: 6px;
+}
+.ta-member-role {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+/* 팀 할 일에서 내가 만든 항목 표시 */
+.team-mine-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(59, 110, 240, 0.1);
+  color: var(--primary);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ===== 개인 프로젝트 패널 (프로젝트 > 세부 할일 구조의 프로젝트 레이어) ===== */
+.pproj-panel,
+.pproj-detail {
+  /* .panel 의 세로 플렉스/스크롤 규칙을 그대로 사용 */
+}
+
+/* 카테고리 필터 (전체/업무/개인/공부) — 메인 탭과 동일한 알약 모양 재사용 */
+.pproj-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.pproj-filter .tab {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+}
+
+/* 프로젝트 생성 폼: 이름(한 줄) + 카테고리/추가(다음 줄) */
+.pproj-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name name"
+    "cat add";
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.pproj-name-input {
+  grid-area: name;
+}
+.pproj-cat-select {
+  grid-area: cat;
+}
+.pproj-form .btn-add {
+  grid-area: add;
+}
+
+.pproj-error {
+  flex-shrink: 0;
+  margin: 0 0 10px;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+.pproj-error:empty {
+  display: none;
+}
+.pproj-error.is-info {
+  color: var(--text-muted);
+}
+
+.pproj-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pproj-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.pproj-item:hover {
+  border-color: var(--primary);
+}
+.pproj-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.pproj-item.is-selected {
+  border-color: var(--primary);
+  background: rgba(59, 110, 240, 0.05);
+}
+
+.pproj-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pproj-item-name {
+  font-weight: 600;
+  flex: 1;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.pproj-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 카테고리 배지 — 내부 키(data-cat)별 색상 매핑.
+   개인용: research/lecture/study/daily · 팀 공용: research/work.
+   기본값(아래 .pcat-badge)은 회색이라 정의되지 않은 옛 더미 값도 보이게 처리. */
+.pcat-badge {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  white-space: nowrap;
+  background: var(--text-muted); /* 미정의 카테고리 폴백(회색) */
+}
+.pcat-badge[data-cat="research"] {
+  background: var(--research);
+}
+.pcat-badge[data-cat="lecture"] {
+  background: var(--personal);
+}
+.pcat-badge[data-cat="study"] {
+  background: var(--study);
+}
+.pcat-badge[data-cat="daily"] {
+  background: #2bb8c4;
+}
+.pcat-badge[data-cat="work"] {
+  background: var(--work);
+}
+
+/* 인라인 수정 폼 */
+.pproj-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pproj-edit-name {
+  flex: 1 1 100%;
+}
+.pproj-edit-cat {
+  flex: 1 1 auto;
+}
+
+/* 우측 세부 할일 패널 — 프로젝트 미선택 안내 */
+.pproj-detail-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 24px 12px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+/* 세부 할일 추가 폼 */
+.ptask-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.ptask-title-input {
+  flex: 1 1 180px;
+}
+.ptask-error {
+  flex-shrink: 0;
+  margin: 0 0 10px;
+  color: var(--danger);
+  font-size: 0.82rem;
+}
+.ptask-error:empty {
+  display: none;
+}
+.ptask-error.is-info {
+  color: var(--text-muted);
+}
+
+/* 프로젝트 미선택 시: 폼·목록·간트·보기탭 숨기고 안내만 표시 / 선택 시: 안내 숨김 */
+.pproj-detail:not(.has-project) .ptask-form,
+.pproj-detail:not(.has-project) .ptask-error,
+.pproj-detail:not(.has-project) .ptask-list,
+.pproj-detail:not(.has-project) .ptask-list-toolbar,
+.pproj-detail:not(.has-project) .ptask-gantt,
+.pproj-detail:not(.has-project) .ptask-viewtabs {
+  display: none;
+}
+.pproj-detail.has-project .pproj-detail-empty {
+  display: none;
+}
+
+/* 세부 할일 패널 헤더: 제목(좌) + 보기 전환 탭(우) */
+.pproj-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.pproj-detail-head .panel-title {
+  margin-bottom: 0;
+}
+
+/* ===== 개인 간트차트 컨테이너 (.gantt-* 그리드를 담음) ===== */
+.ptask-gantt {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden; /* 1fr 칸이라 가로 스크롤 없이 한 화면 */
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* 축(라벨 열 너비만큼 띄우고 시작~끝 날짜 표시) */
+.ptg-axis {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ptg-axis-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ptg-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ptg-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.ptg-label {
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ptg-label.is-done {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* 막대 트랙 + 막대 (left/width 는 JS가 % 로 설정) */
+.ptg-track {
+  position: relative;
+  height: 18px;
+  background: #eceef2;
+  border-radius: 4px;
+}
+.ptg-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 3px;
+  background: var(--primary);
+  border-radius: 4px;
+}
+/* 완료된 할일: 초록색 + 사선 무늬로 이중 구분 */
+.ptg-bar.is-done {
+  background-color: var(--study);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.35) 0,
+    rgba(255, 255, 255, 0.35) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+.ptask-gantt-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 24px 12px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  margin: 0;
+}
+.ptask-gantt-note {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* 프로젝트 목록의 진도율 막대 (메인 앱 .progress 재사용, 간격만 조정) */
+.pproj-item .progress-label {
+  margin-top: 10px;
+}
+
 /* ===== 반응형: 모바일에서 위아래로 쌓기 ===== */
 @media (max-width: 760px) {
   /* 패널을 세로로 쌓을 때는 화면 전체가 스크롤되도록 고정 높이 해제 */
@@ -858,7 +1500,9 @@ body {
     overflow: visible;
   }
 
-  .layout {
+  .layout,
+  .personal-screen,
+  .team-layout {
     grid-template-columns: 1fr;
     overflow: visible;
   }
@@ -870,7 +1514,9 @@ body {
 
   .project-list,
   .task-list,
-  .gantt {
+  .pproj-list,
+  .gantt,
+  .ptask-gantt {
     overflow-y: visible;
     flex: 0 1 auto;
   }
