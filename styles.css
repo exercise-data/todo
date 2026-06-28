@@ -1261,6 +1261,46 @@ body[data-view-mode="team"] .team-screen {
   overflow-y: auto;
 }
 
+/* 7단계) 데이터 백업/복원 — 상단 헤더 우측에 컴팩트 배치(라벨 아래 버튼 2개).
+   현재 화면 모드에 따라 개인/팀 중 하나만 표시. */
+.header-data-tools {
+  display: flex;
+  align-items: center;
+}
+.data-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.data-tools-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.data-tools-btns {
+  display: flex;
+  gap: 4px;
+}
+.data-tools .btn {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+/* 화면 모드별 토글: 개인용에서는 팀 데이터 숨김, 팀 공용에서는 개인 데이터 숨김 */
+body[data-view-mode="personal"] .team-data-tools {
+  display: none;
+}
+body[data-view-mode="team"] .personal-data-tools {
+  display: none;
+}
+
 .pproj-item {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1373,13 +1413,13 @@ body[data-view-mode="team"] .team-screen {
   color: var(--text-muted);
 }
 
-/* 프로젝트 미선택 시: 폼·목록·간트·보기탭 숨기고 안내만 표시 / 선택 시: 안내 숨김 */
+/* 프로젝트 미선택 시: 폼·목록·간트·보기탭·내보내기 숨기고 안내만 표시 / 선택 시: 안내 숨김 */
 .pproj-detail:not(.has-project) .ptask-form,
 .pproj-detail:not(.has-project) .ptask-error,
 .pproj-detail:not(.has-project) .ptask-list,
 .pproj-detail:not(.has-project) .ptask-list-toolbar,
 .pproj-detail:not(.has-project) .ptask-gantt,
-.pproj-detail:not(.has-project) .ptask-viewtabs {
+.pproj-detail:not(.has-project) .pproj-detail-actions {
   display: none;
 }
 .pproj-detail.has-project .pproj-detail-empty {
@@ -1397,6 +1437,29 @@ body[data-view-mode="team"] .team-screen {
 }
 .pproj-detail-head .panel-title {
   margin-bottom: 0;
+}
+/* 헤더 우측: 보기 전환 탭 + PNG/PDF 내보내기 묶음 */
+.pproj-detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+/* 8단계) PNG/PDF 내보내기 버튼 + Safari 안내 */
+.ptask-export {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ptask-export .btn {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
+.ptask-export-note {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: help;
 }
 
 /* ===== 개인 간트차트 컨테이너 (.gantt-* 그리드를 담음) ===== */

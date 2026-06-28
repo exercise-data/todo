@@ -29,6 +29,26 @@
       </nav>
       <!-- 1단계) 로그인 사용자 표시: 이름 + UID(복사 가능) + 로그아웃 -->
       <div class="auth-bar">
+        <!-- 7단계) 데이터 백업/복원 — 영역 전체(개인용/선택 팀)를 다루는 전역 기능이라 상단 우측에.
+             현재 화면 모드(data-view-mode)에 따라 개인용/팀용 중 하나만 보인다(CSS 토글). -->
+        <div class="header-data-tools">
+          <div class="data-tools personal-data-tools">
+            <span class="data-tools-label">개인 데이터</span>
+            <span class="data-tools-btns">
+              <button type="button" class="btn btn-cancel pdata-export">내보내기</button>
+              <button type="button" class="btn btn-cancel pdata-import">가져오기</button>
+            </span>
+            <input type="file" class="pdata-file" accept="application/json,.json" hidden aria-hidden="true" />
+          </div>
+          <div class="data-tools team-data-tools">
+            <span class="data-tools-label">팀 데이터</span>
+            <span class="data-tools-btns">
+              <button type="button" class="btn btn-cancel tdata-export">내보내기</button>
+              <button type="button" class="btn btn-cancel tdata-import">가져오기</button>
+            </span>
+            <input type="file" class="tdata-file" accept="application/json,.json" hidden aria-hidden="true" />
+          </div>
+        </div>
         <div class="auth-user">
           <span class="auth-name" id="auth-name"></span>
           <span class="auth-uid-row">
@@ -91,10 +111,19 @@
         <h2 class="panel-title">
           세부 할 일 — <span class="pproj-detail-name">선택된 프로젝트 없음</span>
         </h2>
-        <!-- 보기 전환: 목록 / 간트차트 -->
-        <div class="ptask-viewtabs view-tabs" role="tablist" aria-label="보기 전환">
-          <button type="button" class="view-tab is-active" data-ptview="list" role="tab">목록</button>
-          <button type="button" class="view-tab" data-ptview="gantt" role="tab">간트</button>
+        <!-- 우측: 보기 전환 + 현재 보기(목록/간트) PNG·PDF 내보내기 -->
+        <div class="pproj-detail-actions">
+          <!-- 보기 전환: 목록 / 간트차트 -->
+          <div class="ptask-viewtabs view-tabs" role="tablist" aria-label="보기 전환">
+            <button type="button" class="view-tab is-active" data-ptview="list" role="tab">목록</button>
+            <button type="button" class="view-tab" data-ptview="gantt" role="tab">간트</button>
+          </div>
+          <!-- 8단계) 현재 보기를 이미지/문서로 (exportView.js) -->
+          <div class="ptask-export" role="group" aria-label="이미지/문서 내보내기">
+            <button type="button" class="btn btn-cancel ptask-export-png" data-export="png">PNG</button>
+            <button type="button" class="btn btn-cancel ptask-export-pdf" data-export="pdf">PDF</button>
+            <span class="ptask-export-note" title="Safari는 빈 이미지가 생성됩니다.">Chrome·Firefox 전용</span>
+          </div>
         </div>
       </div>
 
@@ -227,9 +256,17 @@
           <h2 class="panel-title">
             세부 할 일 — <span class="pproj-detail-name">선택된 프로젝트 없음</span>
           </h2>
-          <div class="ptask-viewtabs view-tabs" role="tablist" aria-label="보기 전환">
-            <button type="button" class="view-tab is-active" data-ptview="list" role="tab">목록</button>
-            <button type="button" class="view-tab" data-ptview="gantt" role="tab">간트</button>
+          <div class="pproj-detail-actions">
+            <div class="ptask-viewtabs view-tabs" role="tablist" aria-label="보기 전환">
+              <button type="button" class="view-tab is-active" data-ptview="list" role="tab">목록</button>
+              <button type="button" class="view-tab" data-ptview="gantt" role="tab">간트</button>
+            </div>
+            <!-- 8단계) 현재 보기를 이미지/문서로 (exportView.js) -->
+            <div class="ptask-export" role="group" aria-label="이미지/문서 내보내기">
+              <button type="button" class="btn btn-cancel ptask-export-png" data-export="png">PNG</button>
+              <button type="button" class="btn btn-cancel ptask-export-pdf" data-export="pdf">PDF</button>
+              <span class="ptask-export-note" title="Safari는 빈 이미지가 생성됩니다.">Chrome·Firefox 전용</span>
+            </div>
           </div>
         </div>
 
@@ -271,5 +308,7 @@
   <script type="module" src="teamProjects.js"></script>
   <script type="module" src="teamTasks.js"></script>
   <script type="module" src="teamAdmin.js"></script>
+  <script type="module" src="dataTransfer.js"></script>
+  <script type="module" src="exportView.js"></script>
 </body>
 </html>

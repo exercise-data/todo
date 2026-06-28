@@ -1,0 +1,115 @@
+// Firestore 보안 규칙 (참고용)
+//
+// Firebase 콘솔 → Firestore Database → 규칙(Rules) 탭에 아래 내용을 붙여 넣고 게시하세요.
+// 이 규칙이 없으면(잠금 모드) 개인 할 일 목록 구독이 "permission-denied"로 실패합니다.
+//
+// 핵심:
+//  - 개인: 로그인한 사용자는 자기 자신(users/{uid})과, ownerUid가 자기 UID인
+//    personalTasks 문서만 읽고 쓸 수 있습니다. 다른 사람의 데이터는 접근 불가.
+//  - 팀: memberships(소속)로 팀원임이 확인되면 그 팀의 teamProjects/teamTasks 를 읽고 쓸 수 있습니다.
+//    ★ memberships 문서 id 는 반드시 "{uid}_{teamId}" 형식이어야 규칙이 소속/관리자를 확인할 수 있습니다.
+//      (5단계에서 "{teamId}_{uid}" → "{uid}_{teamId}" 로 통일됨. 기존 시드 문서는 새 id로 다시 만들어야 합니다.)
+//      예) uid="abc123", teamId="alpha" → 문서 id "abc123_alpha",
+//          필드 { uid:"abc123", teamId:"alpha", role:"admin"|"member", teamName?:"알파팀" }
+//  - 관리자: 그 팀에 대한 내 membership.role == "admin" 이면 그 팀의 memberships 를
+//    읽고(전체 명단) 추가·역할변경·제거할 수 있습니다. 그 외 쓰기는 모두 거부됩니다.
+//    첫 관리자는 콘솔에서 직접 시드해야 합니다(부트스트랩).
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 팀 소속 확인 헬퍼. 문서 id 규칙 "{uid}_{teamId}" 에 의존.
+    function membershipId(teamId) {
+      return request.auth.uid + '_' + teamId;
+    }
+    function isTeamMember(teamId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/memberships/$(membershipId(teamId)));
+    }
+    // 내가 그 팀의 관리자(role=="admin")인가
+    function isTeamAdmin(teamId) {
+      return isTeamMember(teamId)
+        && get(/databases/$(database)/documents/memberships/$(membershipId(teamId))).data.role == 'admin';
+    }
+
+    // 1단계: 본인 사용자 문서만 읽기/쓰기
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 팀 소속(memberships) — 문서 id: "{uid}_{teamId}", 필드 { uid, teamId, role, teamName? }
+    //   읽기: 본인 소속 문서 OR 그 팀의 관리자(명단 조회).
+    //   쓰기: 그 팀의 관리자만. 생성 시 문서 id 가 "{uid}_{teamId}" 와 일치해야 하고,
+    //         수정/삭제 시 uid·teamId 는 바꿀 수 없음(역할만 변경 가능).
+    match /memberships/{mId} {
+      allow read: if request.auth != null
+                  && (resource.data.uid == request.auth.uid
+                      || isTeamAdmin(resource.data.teamId));
+      allow create: if isTeamAdmin(request.resource.data.teamId)
+                    && mId == request.resource.data.uid + '_' + request.resource.data.teamId;
+      allow update: if isTeamAdmin(resource.data.teamId)
+                    && request.resource.data.teamId == resource.data.teamId
+                    && request.resource.data.uid == resource.data.uid;
+      allow delete: if isTeamAdmin(resource.data.teamId);
+    }
+
+    // 4단계: 팀 프로젝트(teamProjects) — 해당 팀의 팀원이면 읽기/쓰기 가능
+    //   필드: { teamId, name, category, createdBy, createdAt }
+    match /teamProjects/{projectId} {
+      allow read: if isTeamMember(resource.data.teamId);
+      allow create: if isTeamMember(request.resource.data.teamId)
+                    && request.resource.data.createdBy == request.auth.uid;
+      // 수정/삭제는 팀원이면 누구나(teamId 변경 금지)
+      allow update: if isTeamMember(resource.data.teamId)
+                    && isTeamMember(request.resource.data.teamId)
+                    && request.resource.data.teamId == resource.data.teamId;
+      allow delete: if isTeamMember(resource.data.teamId);
+    }
+
+    // 3·4단계: 팀 공용 할 일(teamTasks) — 해당 팀의 팀원이면 읽기/쓰기 가능
+    //   필드: { teamId, projectId, title, startDate, endDate, completed, createdBy, createdAt }
+    match /teamTasks/{taskId} {
+      allow read: if isTeamMember(resource.data.teamId);
+      allow create: if isTeamMember(request.resource.data.teamId)
+                    && request.resource.data.createdBy == request.auth.uid;
+      // 수정/삭제는 팀원이면 누구나(teamId 변경 금지)
+      allow update: if isTeamMember(resource.data.teamId)
+                    && isTeamMember(request.resource.data.teamId)
+                    && request.resource.data.teamId == resource.data.teamId;
+      allow delete: if isTeamMember(resource.data.teamId);
+    }
+
+    // 개인 프로젝트(personalProjects) — ownerUid 가 본인인 문서만 접근
+    //   필드: { ownerUid, name, category("업무"|"개인"|"공부"), createdAt }
+    match /personalProjects/{projectId} {
+      allow read: if request.auth != null
+                  && resource.data.ownerUid == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // 2단계: 개인 할 일 — ownerUid 가 본인인 문서만 접근
+    match /personalTasks/{taskId} {
+      // 목록 쿼리/읽기: 본인 소유 문서만
+      allow read: if request.auth != null
+                  && resource.data.ownerUid == request.auth.uid;
+
+      // 생성: 새 문서의 ownerUid 가 본인이어야 함
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+
+      // 수정/삭제: 본인 소유 문서만 (ownerUid 변경 금지)
+      allow update: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}
