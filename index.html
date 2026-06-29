@@ -26,6 +26,8 @@
       <nav class="view-switch" role="tablist" aria-label="화면 전환">
         <button type="button" class="vbtn is-active" data-mode="personal" role="tab" aria-selected="true">개인용</button>
         <button type="button" class="vbtn" data-mode="team" role="tab" aria-selected="false">팀 공용</button>
+        <!-- 팀 관리 탭: 슈퍼관리자/팀관리자에게만 보임(teamManage.js 가 is-hidden 토글) -->
+        <button type="button" class="vbtn team-manage-tab is-hidden" data-mode="manage" role="tab" aria-selected="false">팀 관리</button>
       </nav>
       <!-- 1단계) 로그인 사용자 표시: 이름 + UID(복사 가능) + 로그아웃 -->
       <div class="auth-bar">
@@ -168,57 +170,38 @@
        구조 클래스(pproj-*, ptask-*, task-item, ptg-*, progress)는 개인 영역과 공유하고,
        팀 모듈은 DOM 조회를 .team-screen 루트로 한정해 개인 영역과 충돌하지 않는다. -->
   <div class="team-screen">
-    <!-- 팀 선택 바 -->
-    <div class="team-select-bar">
-      <label class="field-label" for="team-select">팀 선택</label>
-      <select class="input team-select" id="team-select" aria-label="볼 팀 선택"></select>
-      <span class="team-select-hint">같은 팀 구성원과 프로젝트·할일을 실시간으로 공유합니다.</span>
+    <!-- 행 1 (공통): 팀 선택 + 팀 가입 신청 — 한 행에 가로 배치(좁으면 자동 줄바꿈) -->
+    <div class="team-row team-top-row">
+      <!-- 팀 선택 바 -->
+      <div class="team-select-bar">
+        <label class="field-label" for="team-select">팀 선택</label>
+        <select class="input team-select" id="team-select" aria-label="볼 팀 선택"></select>
+        <span class="team-select-hint">팀원과 실시간 공유</span>
+      </div>
+
+      <!-- 9단계) 팀 가입 신청 — 로그인 사용자가 아직 속하지 않은 팀에 직접 가입을 신청한다.
+           teamJoin.js 가 teams/memberships/joinRequests 를 읽어 목록과 상태를 그린다.
+           고유 클래스(team-join-*)를 써서 다른 팀/개인 모듈과 충돌하지 않는다. -->
+      <section class="panel team-join" aria-label="팀 가입 신청">
+        <!-- 한 줄 압축: [신청 그룹] + [대기 중 그룹] 을 같은 행에 가로 배치(좁으면 wrap) -->
+        <div class="team-join-bar">
+          <!-- 신청: 라벨 + 팀 선택 드롭다운 + 신청 버튼 -->
+          <div class="team-join-apply-group">
+            <span class="team-join-label">팀 가입 신청</span>
+            <select class="input team-join-select" aria-label="가입할 팀 선택"></select>
+            <button type="button" class="btn btn-add team-join-apply">신청</button>
+          </div>
+          <!-- 대기 중: 라벨 + 대기 팀 드롭다운 + 철회 버튼 (teamJoin.js 가 채움; 비면 숨김) -->
+          <div class="team-join-pending"></div>
+        </div>
+        <p class="team-join-error" role="status" aria-live="polite"></p>
+        <!-- 신청 폼(사유 + 개인정보 동의): 신청 버튼을 누르면 여기에 열린다 -->
+        <div class="team-join-form-area"></div>
+      </section>
     </div>
 
-    <!-- 5단계) 팀 관리 영역 — 선택된 팀의 관리자(role=admin)에게만 보임.
-         teamAdmin.js 가 내 역할을 확인해 is-hidden 을 토글한다.
-         6단계 표시 변경) 제목 줄을 누르면 접기/펼치기(아코디언). 기본 접힘.
-         펼침/접힘 상태는 teamAdmin.js 가 localStorage 에 저장한다. -->
-    <section class="panel team-admin is-hidden" aria-label="팀 관리">
-      <!-- 제목 줄 = 접기/펼치기 토글 (role=button + aria-expanded + 키보드) -->
-      <h2
-        class="panel-title team-admin-toggle"
-        role="button"
-        tabindex="0"
-        aria-expanded="false"
-        aria-controls="team-admin-body"
-      >
-        <span class="team-admin-chevron" aria-hidden="true"></span>
-        팀 관리 <span class="team-admin-tag">관리자 전용</span>
-      </h2>
-
-      <!-- 접히는 본문: 펼쳤을 때만 표시 -->
-      <div class="team-admin-body" id="team-admin-body">
-        <!-- 팀원 추가: 대상 UID + 역할 -->
-        <form class="team-admin-form" autocomplete="off">
-          <input
-            type="text"
-            class="input ta-uid-input"
-            placeholder="추가할 사용자 UID"
-            aria-label="추가할 사용자 UID"
-          />
-          <select class="input ta-role-select" aria-label="역할 선택">
-            <option value="member">member</option>
-            <option value="admin">admin</option>
-          </select>
-          <button type="submit" class="btn btn-add">팀원 추가</button>
-        </form>
-        <p class="team-admin-hint">
-          대상자는 먼저 한 번 로그인해 자신의 UID를 알려준 상태여야 합니다.
-        </p>
-
-        <!-- 동작 안내 / 오류 -->
-        <p class="team-admin-error" role="alert"></p>
-
-        <!-- 팀원 목록: teamAdmin.js의 renderMembers()가 채웁니다 -->
-        <ul class="team-admin-list"></ul>
-      </div>
-    </section>
+    <!-- 관리 기능(새 팀 만들기·팀원 관리·가입 신청 처리)은 '팀 관리' 탭(.team-manage-screen)으로 이동했다.
+         팀 공용 탭에는 작업 공간(팀 선택·가입 신청·프로젝트·할일)만 남긴다. -->
 
     <!-- 2단: 팀 프로젝트(좌) + 세부 할일(우) -->
     <div class="team-layout">
@@ -300,6 +283,149 @@
       </section>
     </div>
   </div>
+  <!-- 팀 관리 화면: 운영·관리 기능(새 팀 만들기·팀원 관리·가입 신청 처리)을 모은다.
+       슈퍼관리자/팀관리자에게만 탭이 보이며, teamManage.js 가 권한·팀선택·새 팀 만들기를 제어한다.
+       teamAdmin.js 는 DOM 조회를 .team-manage-screen 루트로 한정한다. -->
+  <div class="team-manage-screen">
+    <!-- 관리할 팀 선택 (슈퍼관리자: 모든 팀 / 팀관리자: 내가 admin 인 팀) -->
+    <div class="manage-select-bar">
+      <label class="field-label" for="manage-team-select">관리할 팀</label>
+      <select class="input admin-team-select" id="manage-team-select" aria-label="관리할 팀 선택"></select>
+      <span class="manage-select-hint">관리 권한이 있는 팀을 선택하세요.</span>
+    </div>
+
+    <!-- 팀명 변경 — 선택된 팀의 표시이름(teams.name)만 수정. 팀 ID(문서 id)는 변경 불가.
+         teamManage.js 가 현재 이름을 채우고 updateDoc 으로 name 만 바꾼다. -->
+    <div class="manage-rename-bar is-hidden">
+      <form class="manage-rename-form" autocomplete="off">
+        <label class="field-label" for="manage-team-name">팀 이름</label>
+        <input
+          type="text"
+          class="input manage-name-input"
+          id="manage-team-name"
+          aria-label="팀 표시 이름"
+        />
+        <button type="submit" class="btn btn-add manage-rename-btn">이름 변경</button>
+        <span class="manage-rename-note">팀 ID는 변경할 수 없습니다.</span>
+      </form>
+      <span class="manage-rename-msg" role="status" aria-live="polite"></span>
+    </div>
+
+    <!-- 새 팀 만들기 — 슈퍼관리자(특정 UID)에게만 보임. teamManage.js 가 is-hidden 토글.
+         만들면 teams/{팀ID} 와 memberships/{내UID}_{팀ID}(role:admin) 두 문서를 함께 기록. -->
+    <form class="create-team-form is-hidden" autocomplete="off">
+      <input
+        type="text"
+        class="input create-team-id"
+        placeholder="팀 ID (영문 소문자·숫자)"
+        aria-label="새 팀 ID"
+      />
+      <input
+        type="text"
+        class="input create-team-name"
+        placeholder="팀 이름"
+        aria-label="새 팀 이름"
+      />
+      <button type="submit" class="btn btn-add">새 팀 만들기</button>
+      <span class="create-team-msg" role="status" aria-live="polite"></span>
+    </form>
+
+    <!-- 팀원 관리 — 선택된 팀의 관리자(role=admin)에게만 보임. teamAdmin.js 가 제어.
+         제목 줄을 누르면 접기/펼치기(아코디언). 기본 접힘. 상태는 localStorage 에 저장. -->
+    <section class="panel team-admin is-hidden" aria-label="팀원 관리">
+      <h2
+        class="panel-title team-admin-toggle"
+        role="button"
+        tabindex="0"
+        aria-expanded="false"
+        aria-controls="team-admin-body"
+      >
+        <span class="team-admin-chevron" aria-hidden="true"></span>
+        팀원 관리 <span class="team-admin-tag">관리자 전용</span>
+      </h2>
+
+      <div class="team-admin-body" id="team-admin-body">
+        <!-- 팀원 추가: 대상 UID + 역할 -->
+        <form class="team-admin-form" autocomplete="off">
+          <input
+            type="text"
+            class="input ta-uid-input"
+            placeholder="추가할 사용자 UID"
+            aria-label="추가할 사용자 UID"
+          />
+          <select class="input ta-role-select" aria-label="역할 선택">
+            <option value="member">member</option>
+            <option value="admin">admin</option>
+          </select>
+          <button type="submit" class="btn btn-add">팀원 추가</button>
+        </form>
+        <p class="team-admin-hint">
+          대상자는 먼저 한 번 로그인해 자신의 UID를 알려준 상태여야 합니다.
+        </p>
+
+        <!-- 동작 안내 / 오류 -->
+        <p class="team-admin-error" role="alert"></p>
+
+        <!-- 팀원 목록: teamAdmin.js의 renderMembers()가 채웁니다 -->
+        <ul class="team-admin-list"></ul>
+      </div>
+    </section>
+
+    <!-- 가입 신청 현황 — 선택된 팀의 대기 중(pending) joinRequests 를 승인/거절.
+         관리자에게만 보이는 독립 아코디언(기본 접힘). teamAdmin.js 가 표시·접힘을 제어한다. -->
+    <section class="panel team-requests is-hidden" aria-label="가입 신청 현황">
+      <h2
+        class="panel-title team-requests-toggle"
+        role="button"
+        tabindex="0"
+        aria-expanded="false"
+        aria-controls="team-requests-body"
+      >
+        <span class="team-requests-chevron" aria-hidden="true"></span>
+        가입 신청 현황
+        <span class="team-admin-tag">관리자 전용</span>
+        <span class="team-requests-count" aria-hidden="true"></span>
+      </h2>
+      <div class="team-requests-body" id="team-requests-body">
+        <ul class="ta-requests-list"></ul>
+      </div>
+    </section>
+
+    <!-- 팀 삭제(위험 구역) — 슈퍼관리자(특정 UID)에게만 보임. teamManage.js 가 is-hidden 토글.
+         가장 파괴적인 기능이라 2단계 확인을 거친다:
+           1차) 경고 confirm() 대화상자
+           2차) 팀 ID 직접 입력값이 실제 팀 ID와 정확히 일치
+         실행 시 그 팀의 teamTasks → teamProjects → memberships → joinRequests → teams/{팀ID}
+         순서로 모두 삭제(연쇄). 다른 팀·개인 데이터는 건드리지 않는다. -->
+    <section class="panel team-danger is-hidden" aria-label="팀 삭제">
+      <h2 class="panel-title team-danger-title">
+        위험 구역 — 팀 삭제
+        <span class="team-admin-tag is-danger">슈퍼관리자 전용</span>
+      </h2>
+      <p class="team-danger-desc">
+        선택한 팀과 그 팀의 <strong>모든 프로젝트·할일·멤버·가입 신청</strong>이
+        영구 삭제되며 <strong>되돌릴 수 없습니다.</strong>
+      </p>
+      <div class="team-danger-confirm">
+        <label class="field-label" for="delete-team-id">
+          확인을 위해 삭제할 팀 ID를 정확히 입력하세요
+        </label>
+        <input
+          type="text"
+          class="input delete-team-id-input"
+          id="delete-team-id"
+          placeholder="팀 ID"
+          aria-label="삭제 확인용 팀 ID 입력"
+          autocomplete="off"
+        />
+        <button type="button" class="btn btn-cancel team-delete-btn">
+          이 팀 영구 삭제
+        </button>
+      </div>
+      <p class="team-danger-msg" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+
   </div><!-- /.app-shell -->
 
   <script type="module" src="auth.js"></script>
@@ -308,6 +434,8 @@
   <script type="module" src="teamProjects.js"></script>
   <script type="module" src="teamTasks.js"></script>
   <script type="module" src="teamAdmin.js"></script>
+  <script type="module" src="teamManage.js"></script>
+  <script type="module" src="teamJoin.js"></script>
   <script type="module" src="dataTransfer.js"></script>
   <script type="module" src="exportView.js"></script>
 </body>

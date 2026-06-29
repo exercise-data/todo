@@ -9,7 +9,8 @@
 // ★ memberships 문서 id 규칙은 "{uid}_{teamId}" 이며, 보안 규칙의 isTeamMember/isTeamAdmin 과 일치한다.
 //   첫 관리자는 콘솔에서 직접 시드해야 한다(부트스트랩).
 //
-// 선택된 팀은 teamProjects.js 가 "team-project-selected" 이벤트로 알려준다(teamId 만 사용).
+// 선택된 팀은 '팀 관리' 탭의 teamManage.js 가 "team-manage-team-selected" 이벤트로 알려준다(teamId 만 사용).
+// (이 모듈의 DOM·기능은 5단계에 '팀 공용' 탭에 있었으나 10단계에서 '팀 관리' 탭으로 이동했다.)
 
 import {
   initializeApp,
@@ -30,6 +31,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { describeError } from "./cloudErrors.js";
@@ -39,13 +41,18 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const MEMBERSHIPS = "memberships";
-const SELECT_EVENT = "team-project-selected";
+const JOIN_REQUESTS = "joinRequests";
+// '팀 관리' 탭의 팀 선택(teamManage.js)이 알려주는 이벤트로 전환(기존 team-project-selected 대신)
+const SELECT_EVENT = "team-manage-team-selected";
+// 슈퍼관리자(특정 UID) — teamManage.js 와 동일. 팀 삭제 중 본인 멤버십이 사라져도
+// "역할 재확인 실패"를 치명 오류로 다루지 않기 위해 사용(권한 판단은 멤버십이 아닌 UID 기준).
+const SUPER_ADMIN_UID = "NiNrcxpjoOTfr9dPLvq9jz3L8eK2";
 
 // 문서 id 규칙: "{uid}_{teamId}"
 const membershipId = (uid, teamId) => `${uid}_${teamId}`;
 
-// ----- DOM 참조 (.team-screen 루트로 한정) -----
-const root = document.querySelector(".team-screen");
+// ----- DOM 참조 (.team-manage-screen 루트로 한정 — '팀 관리' 탭으로 이동) -----
+const root = document.querySelector(".team-manage-screen");
 const adminPanel = root.querySelector(".team-admin");
 const toggleEl = root.querySelector(".team-admin-toggle");
 const formEl = root.querySelector(".team-admin-form");
@@ -53,6 +60,11 @@ const uidInput = root.querySelector(".ta-uid-input");
 const roleSelect = root.querySelector(".ta-role-select");
 const errorEl = root.querySelector(".team-admin-error");
 const listEl = root.querySelector(".team-admin-list");
+// 가입 신청 현황(독립 아코디언 패널)
+const reqPanel = root.querySelector(".team-requests");
+const reqToggleEl = root.querySelector(".team-requests-toggle");
+const reqCountEl = root.querySelector(".team-requests-count");
+const reqListEl = root.querySelector(".ta-requests-list");
 
 // ----- 상태 -----
 let currentUid = null;
@@ -62,6 +74,8 @@ let myTeamName = "";
 let roleUnsub = null; // 내 membership(역할) 구독
 let membersUnsub = null; // 팀 전체 명단 구독
 let membersCache = [];
+let requestsUnsub = null; // 가입 신청(pending) 구독
+let requestsCache = [];
 
 // ----- 메시지 -----
 function showError(msg) {
@@ -78,10 +92,13 @@ function clearMessage() {
 }
 
 function showPanel() {
+  // "팀 관리" 와 "가입 신청 현황"(독립 아코디언) 둘 다 관리자에게만 노출
   adminPanel.classList.remove("is-hidden");
+  reqPanel.classList.remove("is-hidden");
 }
 function hidePanel() {
   adminPanel.classList.add("is-hidden");
+  reqPanel.classList.add("is-hidden");
 }
 
 // ----- 팀원 목록 렌더 -----
@@ -231,6 +248,188 @@ function subscribeMembers(teamId) {
   );
 }
 
+// ===== 9단계: 가입 신청 처리 (관리자) =====
+
+// 신청 시각(밀리초) — 정렬용
+function reqMillis(r) {
+  const ts = r.createdAt;
+  if (ts && typeof ts.toMillis === "function") return ts.toMillis();
+  return Infinity;
+}
+// Firestore Timestamp → 사람이 읽는 시각
+function formatTs(ts) {
+  if (ts && typeof ts.toDate === "function") {
+    try {
+      return ts.toDate().toLocaleString("ko-KR");
+    } catch {
+      return "-";
+    }
+  }
+  return "-";
+}
+
+// ----- 대기 중 신청 목록 렌더 (관리자만) -----
+function renderRequests() {
+  reqListEl.innerHTML = "";
+  // 접힌 상태에서도 대기 건수를 알 수 있게 제목 옆 배지 갱신(표시 전용)
+  if (reqCountEl) {
+    const n = myRole === "admin" ? requestsCache.length : 0;
+    reqCountEl.textContent = n > 0 ? String(n) : "";
+  }
+  if (myRole !== "admin") return;
+
+  if (requestsCache.length === 0) {
+    const li = document.createElement("li");
+    li.className = "task-empty";
+    li.textContent = "대기 중인 신청이 없습니다.";
+    reqListEl.append(li);
+    return;
+  }
+
+  // 오래된 신청 먼저(신청 시각 오름차순)
+  const sorted = [...requestsCache].sort((a, b) => reqMillis(a) - reqMillis(b));
+
+  sorted.forEach((r) => {
+    const li = document.createElement("li");
+    li.className = "ta-req";
+    li.dataset.id = r.id;
+    li.dataset.uid = r.uid || "";
+
+    const info = document.createElement("div");
+    info.className = "ta-req-info";
+
+    const name = document.createElement("div");
+    name.className = "ta-req-name";
+    name.textContent = r.displayName || "(이름 없음)";
+
+    const email = document.createElement("div");
+    email.className = "ta-req-email";
+    email.textContent = r.email || "(이메일 없음)";
+
+    const msg = document.createElement("div");
+    msg.className = "ta-req-message";
+    if (r.message) {
+      msg.textContent = r.message;
+    } else {
+      msg.textContent = "(사유 없음)";
+      msg.classList.add("is-empty");
+    }
+
+    const time = document.createElement("div");
+    time.className = "ta-req-time";
+    time.textContent = "신청: " + formatTs(r.createdAt);
+
+    info.append(name, email, msg, time);
+
+    const actions = document.createElement("div");
+    actions.className = "ta-req-actions";
+
+    const approveBtn = document.createElement("button");
+    approveBtn.type = "button";
+    approveBtn.className = "btn btn-add";
+    approveBtn.dataset.action = "approve";
+    approveBtn.textContent = "승인";
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.type = "button";
+    rejectBtn.className = "btn btn-cancel";
+    rejectBtn.dataset.action = "reject";
+    rejectBtn.textContent = "거절";
+
+    actions.append(approveBtn, rejectBtn);
+
+    li.append(info, actions);
+    reqListEl.append(li);
+  });
+}
+
+// ----- 현재 팀의 대기 중 신청 구독 (관리자만) -----
+function subscribeRequests(teamId) {
+  if (requestsUnsub) {
+    requestsUnsub();
+    requestsUnsub = null;
+  }
+  // teamId + status 두 등식 필터 → 지그재그 병합(복합 색인 불필요)
+  const q = query(
+    collection(db, JOIN_REQUESTS),
+    where("teamId", "==", teamId),
+    where("status", "==", "pending")
+  );
+  requestsUnsub = onSnapshot(
+    q,
+    (snap) => {
+      requestsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderRequests();
+    },
+    (err) => {
+      console.error("가입 신청 목록 구독 실패:", err);
+      showError("가입 신청 목록을 불러오지 못했습니다: " + describeError(err));
+    }
+  );
+}
+
+// ----- 승인/거절 (위임) -----
+reqListEl.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const li = e.target.closest(".ta-req");
+  if (!li) return;
+  if (myRole !== "admin" || !currentTeamId) {
+    showError("관리자만 신청을 처리할 수 있습니다.");
+    return;
+  }
+
+  const reqId = li.dataset.id;
+  const applicantUid = li.dataset.uid;
+  const action = btn.dataset.action;
+  const req = requestsCache.find((r) => r.id === reqId);
+  const nm = req ? req.displayName || applicantUid : applicantUid;
+
+  if (action === "approve") {
+    if (!applicantUid) {
+      showError("신청자 UID를 확인할 수 없습니다.");
+      return;
+    }
+    try {
+      // 팀원 추가 + 신청 제거를 원자적으로 처리(둘 다 관리자에게 허용됨)
+      const member = { uid: applicantUid, teamId: currentTeamId, role: "member" };
+      if (myTeamName) member.teamName = myTeamName; // 팀 이름을 알면 함께 저장(선택)
+      const batch = writeBatch(db);
+      batch.set(
+        doc(db, MEMBERSHIPS, membershipId(applicantUid, currentTeamId)),
+        member
+      );
+      batch.delete(doc(db, JOIN_REQUESTS, reqId));
+      await batch.commit();
+      showInfo(`'${nm}' 님을 팀원으로 승인했습니다.`);
+    } catch (err) {
+      console.error("승인 실패:", err);
+      if (err && err.code === "permission-denied") {
+        showError(
+          "권한이 없습니다(Missing or insufficient permissions). 관리자 권한/보안 규칙(firestore.rules)을 확인하세요."
+        );
+      } else {
+        showError("승인에 실패했습니다: " + describeError(err));
+      }
+    }
+  } else if (action === "reject") {
+    if (!confirm(`'${nm}' 님의 가입 신청을 거절(삭제)할까요?`)) return;
+    try {
+      await deleteDoc(doc(db, JOIN_REQUESTS, reqId));
+      showInfo(`'${nm}' 님의 신청을 거절했습니다.`);
+    } catch (err) {
+      console.error("거절 실패:", err);
+      if (err && err.code === "permission-denied") {
+        showError(
+          "권한이 없습니다(Missing or insufficient permissions). 관리자 권한/보안 규칙(firestore.rules)을 확인하세요."
+        );
+      } else {
+        showError("거절에 실패했습니다: " + describeError(err));
+      }
+    }
+  }
+});
+
 // ----- 내 역할 확인 → 관리 영역 표시/숨김 -----
 function evaluate() {
   if (roleUnsub) {
@@ -241,14 +440,20 @@ function evaluate() {
     membersUnsub();
     membersUnsub = null;
   }
+  if (requestsUnsub) {
+    requestsUnsub();
+    requestsUnsub = null;
+  }
   myRole = null;
   myTeamName = "";
   membersCache = [];
+  requestsCache = [];
   clearMessage();
 
   if (!currentUid || !currentTeamId) {
     hidePanel();
     renderMembers();
+    renderRequests();
     return;
   }
 
@@ -262,17 +467,37 @@ function evaluate() {
       if (myRole === "admin") {
         showPanel();
         subscribeMembers(currentTeamId);
+        subscribeRequests(currentTeamId);
       } else {
         hidePanel();
         if (membersUnsub) {
           membersUnsub();
           membersUnsub = null;
         }
+        if (requestsUnsub) {
+          requestsUnsub();
+          requestsUnsub = null;
+        }
         membersCache = [];
+        requestsCache = [];
         renderMembers();
+        renderRequests();
       }
     },
     (err) => {
+      // 팀 삭제 진행 중에는 슈퍼관리자 본인의 이 팀 멤버십이 지워지면서, 그 멤버십 문서를
+      // 다시 읽으려다 permission-denied 가 날 수 있다(존재하지 않는 본인 문서 읽기).
+      // 이는 정상적인 삭제의 부수효과이므로 치명 오류로 처리하지 않고 조용히 관리 영역만 숨긴다.
+      // (관리 권한 판단은 멤버십이 아니라 슈퍼관리자 UID/실제 admin 멤버십으로 이뤄진다.)
+      if (currentUid === SUPER_ADMIN_UID && err && err.code === "permission-denied") {
+        myRole = null;
+        hidePanel();
+        membersCache = [];
+        requestsCache = [];
+        renderMembers();
+        renderRequests();
+        return;
+      }
       console.error("내 역할 확인 실패:", err);
       hidePanel();
     }
@@ -314,6 +539,38 @@ toggleEl.addEventListener("keydown", (e) => {
 });
 // 초기 상태 복원(로그인/권한과 무관하게 표시 상태만 적용)
 applyOpenState(loadOpen());
+
+// ----- "가입 신청 현황" 아코디언 — 팀 관리와 동일 방식(별도 localStorage 키) -----
+const REQ_OPEN_KEY = "teamRequestsOpen";
+function loadReqOpen() {
+  try {
+    return localStorage.getItem(REQ_OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function saveReqOpen(open) {
+  try {
+    localStorage.setItem(REQ_OPEN_KEY, open ? "1" : "0");
+  } catch {}
+}
+function applyReqOpenState(open) {
+  reqPanel.classList.toggle("is-open", open);
+  reqToggleEl.setAttribute("aria-expanded", String(open));
+}
+function setReqOpen(open) {
+  applyReqOpenState(open);
+  saveReqOpen(open);
+}
+reqToggleEl.addEventListener("click", () => {
+  setReqOpen(!reqPanel.classList.contains("is-open"));
+});
+reqToggleEl.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  e.preventDefault();
+  setReqOpen(!reqPanel.classList.contains("is-open"));
+});
+applyReqOpenState(loadReqOpen());
 
 // ----- 팀 선택 변경 수신(teamId 변경 시에만 재평가) -----
 document.addEventListener(SELECT_EVENT, (e) => {

@@ -28,8 +28,10 @@ import {
   where,
   onSnapshot,
   getDocs,
+  getDoc,
   addDoc,
   updateDoc,
+  setDoc,
   doc,
   writeBatch,
   serverTimestamp,
@@ -44,7 +46,10 @@ const db = getFirestore(app);
 const PROJECTS = "teamProjects";
 const TASKS = "teamTasks";
 const MEMBERSHIPS = "memberships";
+const TEAMS = "teams";
 const SELECT_EVENT = "team-project-selected"; // teamTasks.js 로 (teamId, projectId) 통지
+// 슈퍼관리자 UID — 이 사람에게만 "새 팀 만들기" UI 를 노출한다.
+const SUPER_ADMIN_UID = "NiNrcxpjoOTfr9dPLvq9jz3L8eK2";
 // 팀 공용 카테고리: 표시 이름(label) ↔ 내부 키(key) 분리. Firestore 에는 key 를 저장한다.
 const CATEGORIES = [
   { key: "research", label: "연구" },
@@ -62,6 +67,7 @@ const catSelect = root.querySelector(".pproj-cat-select");
 const errorEl = root.querySelector(".pproj-error");
 const listEl = root.querySelector(".pproj-list");
 const detailNameEl = root.querySelector(".pproj-detail-name");
+// (새 팀 만들기는 '팀 관리' 탭으로 이동 → teamManage.js 가 담당)
 
 // ----- 상태 -----
 let currentUid = null;

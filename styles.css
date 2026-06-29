@@ -989,17 +989,95 @@ body[data-auth="in"] .auth-screen {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* 클라우드 화면(개인/팀)은 기본 숨김, 해당 모드에서만 표시 */
+/* 클라우드 화면(개인/팀/팀관리)은 기본 숨김, 해당 모드에서만 표시 */
 .personal-screen,
-.team-screen {
+.team-screen,
+.team-manage-screen {
   display: none;
 }
-/* 개인/팀 모드: 해당 화면 표시 (둘 다 본문 높이를 채우는 세로 플렉스/그리드) */
+/* 개인/팀/팀관리 모드: 해당 화면 표시 */
 body[data-view-mode="personal"] .personal-screen {
   display: grid;
 }
 body[data-view-mode="team"] .team-screen {
   display: flex;
+}
+body[data-view-mode="manage"] .team-manage-screen {
+  display: flex;
+}
+
+/* 팀 관리 화면: 관리 기능을 세로로 쌓고, 길면 세로 스크롤 */
+.team-manage-screen {
+  flex: 1;
+  min-height: 0;
+  margin: var(--gap);
+  flex-direction: column;
+  overflow-y: auto;
+}
+/* 직계 자식(바·패널)은 줄어들지 않게 자연 높이를 유지한다.
+   줄어들면 .panel 의 overflow:hidden 때문에 콘텐츠가 잘리고, 화면이 넘치지 않아
+   세로 스크롤이 생기지 않는다(→ 맨 아래 "팀 삭제" 영역이 잘려 보이지 않음).
+   '팀 공용'(.team-screen)의 .team-row 와 동일하게 flex-shrink:0 으로 페이지 스크롤을 보장. */
+.team-manage-screen > * {
+  flex-shrink: 0;
+}
+.manage-select-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: var(--gap);
+}
+.admin-team-select {
+  width: auto;
+  min-width: 180px;
+  padding: 6px 10px;
+}
+.manage-select-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 팀명 변경 바 */
+.manage-rename-bar {
+  flex-shrink: 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: var(--gap);
+}
+.manage-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.manage-name-input {
+  width: auto;
+  min-width: 200px;
+  padding: 6px 10px;
+}
+.manage-rename-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.manage-rename-msg {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.manage-rename-msg:empty {
+  display: none;
+}
+.manage-rename-msg.is-error {
+  color: var(--danger);
 }
 
 .personal-screen {
@@ -1011,12 +1089,42 @@ body[data-view-mode="team"] .team-screen {
   align-items: stretch;
 }
 
-/* 팀 화면: 팀 선택 바(고정) + 2단 레이아웃(나머지 높이) */
+/* 팀 화면: 메뉴 행들(고정) + 2단 레이아웃(나머지 높이).
+   콘텐츠가 길면(아코디언 펼침 등) 100vh 안에서 잘리지 않고 세로 스크롤되게 한다. */
 .team-screen {
   flex: 1;
   min-height: 0;
   margin: var(--gap);
   flex-direction: column;
+  overflow-y: auto;
+}
+
+/* 메뉴 행: 같은 줄에 가로 배치, 좁으면 자동 줄바꿈(wrap) */
+.team-row {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  align-items: flex-start;
+  margin-bottom: var(--gap);
+  flex-shrink: 0;
+}
+/* 행 안의 패널/폼은 행이 간격을 관리하므로 자체 하단 여백 제거 */
+.team-row > * {
+  margin-bottom: 0;
+  min-width: 0;
+}
+/* 팀 선택 바·새 팀 만들기는 내용폭으로 컴팩트하게, 가입신청/팀관리가 남는 폭을 차지 */
+.team-top-row > .team-select-bar,
+.team-admin-row > .create-team-form {
+  flex: 0 1 auto;
+}
+.team-top-row > .team-join,
+.team-admin-row > .team-admin {
+  flex: 1 1 320px;
+}
+/* 관리자 행: 두 자식(새 팀 만들기·팀 관리)이 모두 숨김이면 행 자체를 접어 빈 여백 제거 */
+.team-admin-row:not(:has(> :not(.is-hidden))) {
+  display: none;
 }
 
 .team-select-bar {
@@ -1029,7 +1137,6 @@ body[data-view-mode="team"] .team-screen {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 14px;
-  margin-bottom: var(--gap);
 }
 .team-select {
   width: auto;
@@ -1041,10 +1148,168 @@ body[data-view-mode="team"] .team-screen {
   color: var(--text-muted);
 }
 
-/* 팀 2단 레이아웃 (개인 화면과 동일 비율) */
+/* 새 팀 만들기 (슈퍼관리자 전용) — '팀 관리' 탭에 패널 형태로 배치 */
+.create-team-form {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: var(--gap);
+}
+.create-team-id,
+.create-team-name {
+  width: auto;
+  min-width: 140px;
+  padding: 6px 10px;
+}
+.create-team-msg {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.create-team-msg.is-error {
+  color: var(--danger);
+}
+
+/* 9단계: 팀 가입 신청 (사용자 측) */
+.team-join {
+  flex-shrink: 0;
+}
+.team-join-error {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+.team-join-error:empty {
+  display: none;
+}
+.team-join-error.is-info {
+  color: var(--text-muted);
+}
+
+/* 한 줄 압축 바: [신청 그룹] + [대기 중 그룹] 가로 배치 (좁으면 그룹 단위로 wrap) */
+.team-join-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+.team-join-apply-group,
+.team-join-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.team-join-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+.team-join-select,
+.team-join-pending-select {
+  width: auto;
+  min-width: 150px;
+  padding: 6px 10px;
+}
+.team-join-apply {
+  flex: 0 0 auto;
+}
+
+/* 대기 중 신청 (드롭다운 한 줄 + 철회) — 신청 그룹과 같은 행. 비면 숨김 */
+.team-join-pending:empty {
+  display: none;
+}
+.team-join-pending-label {
+  color: var(--research);
+  font-weight: 600;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+/* 신청 폼 영역 */
+.team-join-form-area:empty {
+  display: none;
+}
+.team-join-form-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* 신청 폼 — 바 아래에 구분선과 함께 열림 */
+.team-join-form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.team-join-applicant {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.team-join-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.team-join-message {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  padding: 8px 10px;
+  font: inherit;
+}
+.team-join-consent {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+.team-join-consent-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.team-join-consent-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+.team-join-consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.team-join-consent-check input {
+  margin-top: 2px;
+}
+.team-join-actions {
+  display: flex;
+  gap: 8px;
+}
+.team-join-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 팀 2단 레이아웃 (개인 화면과 동일 비율).
+   여유 높이는 채우되(flex:1) 메뉴가 길어져도 일정 높이는 유지 → 넘치면 .team-screen 이 스크롤. */
 .team-layout {
   flex: 1;
-  min-height: 0;
+  min-height: 360px;
   display: grid;
   grid-template-columns: 340px 1fr;
   gap: var(--gap);
@@ -1112,6 +1377,52 @@ body[data-view-mode="team"] .team-screen {
   vertical-align: middle;
   margin-left: 4px;
 }
+/* 팀 삭제(위험 구역) — 슈퍼관리자 전용 */
+.team-admin-tag.is-danger {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.12);
+}
+.team-danger {
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.04);
+}
+.team-danger-desc {
+  margin: 8px 0 12px;
+  color: var(--muted, #555);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.team-danger-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.delete-team-id-input {
+  flex: 1 1 240px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.team-delete-btn {
+  background: #dc2626;
+  color: #fff;
+  font-weight: 600;
+}
+.team-delete-btn:hover {
+  background: #b91c1c;
+}
+.team-delete-btn:disabled {
+  background: #f1a9a9;
+  cursor: default;
+}
+.team-danger-msg {
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  min-height: 1.2em;
+}
+.team-danger-msg.is-error {
+  color: #b91c1c;
+}
+
 .team-admin-form {
   display: flex;
   flex-wrap: wrap;
@@ -1181,6 +1492,121 @@ body[data-view-mode="team"] .team-screen {
   width: auto;
   padding: 4px 8px;
   font-size: 0.8rem;
+}
+
+/* 9단계: 가입 신청 현황 (관리자) — 독립 아코디언 패널 (팀 관리와 동일 방식) */
+.team-requests {
+  flex-shrink: 0;
+  margin-bottom: var(--gap);
+}
+.team-requests .panel-title {
+  margin-bottom: 0;
+}
+.team-requests-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+}
+.team-requests-toggle:focus-visible {
+  outline: 2px solid var(--research);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.team-requests-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+}
+.team-requests-chevron::before {
+  content: "\25B8"; /* ▸ */
+  font-size: 1.25em;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--research);
+}
+.team-requests.is-open .team-requests-chevron::before {
+  content: "\25BE"; /* ▾ */
+}
+.team-requests-body {
+  display: none;
+}
+.team-requests.is-open .team-requests-toggle {
+  margin-bottom: 12px;
+}
+.team-requests.is-open .team-requests-body {
+  display: block;
+}
+/* 대기 건수 배지(접힌 상태에서도 알림) — 비어 있으면 숨김 */
+.team-requests-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 4px;
+}
+.team-requests-count:empty {
+  display: none;
+}
+.ta-requests-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.ta-req {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.ta-req-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  flex: 1;
+}
+.ta-req-name {
+  font-weight: 600;
+}
+.ta-req-email {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.ta-req-message {
+  font-size: 0.85rem;
+  margin-top: 2px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ta-req-message.is-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.ta-req-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.ta-req-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 /* 팀 할 일에서 내가 만든 항목 표시 */
@@ -1298,6 +1724,11 @@ body[data-view-mode="personal"] .team-data-tools {
   display: none;
 }
 body[data-view-mode="team"] .personal-data-tools {
+  display: none;
+}
+/* 팀 관리 모드: 데이터 백업/복원 도구는 숨김(관리 전용 화면) */
+body[data-view-mode="manage"] .personal-data-tools,
+body[data-view-mode="manage"] .team-data-tools {
   display: none;
 }
 
@@ -1568,6 +1999,19 @@ body[data-view-mode="team"] .personal-data-tools {
   .team-layout {
     grid-template-columns: 1fr;
     overflow: visible;
+  }
+
+  /* 팀/팀관리 화면도 내부 스크롤 대신 페이지 스크롤 사용 */
+  .team-screen,
+  .team-manage-screen {
+    overflow: visible;
+  }
+  .team-layout {
+    min-height: 0;
+  }
+  /* 좁은 화면에선 목록 높이 제한 해제 → 페이지 스크롤로 통일 */
+  .ta-requests-list {
+    max-height: none;
   }
 
   /* 각 패널은 내용 높이만큼, 내부 개별 스크롤 대신 페이지 스크롤 사용 */
