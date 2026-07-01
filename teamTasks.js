@@ -77,6 +77,7 @@ let ganttRangeOpen = false; // 간트 '기간 설정' 편집 폼 열림 여부
 let ganttPeriods = []; // 마지막 렌더의 축 기간 배열 (드래그 좌표→날짜 변환용)
 let ganttAxis = null; // 마지막 렌더의 축 범위 { start, end } (드래그 중 축 고정용)
 let ganttDragRange = null; // 드래그 중 축을 고정하는 임시 범위 (있으면 사용자 기간보다 우선)
+let ganttDragOrder = null; // 드래그 중 행(할 일) 순서를 고정하는 id 배열 (있으면 정렬 대신 이 순서 사용)
 let ganttBarDraggedAt = 0; // 드래그/핸들 조작 종료 시각(ms). 직후 click(수정폼 열림) 억제용
 
 // UI 상태 저장 키: "팀+프로젝트" 단위. 둘 중 하나라도 없으면 null.
@@ -367,6 +368,11 @@ function dayMarkClass(ymd) {
   if (dow === 0) return "is-sun";
   if (dow === 6) return "is-sat";
   return "";
+}
+// 요일 한글 한 글자 (0=일 … 6=토) — 주말/공휴일 음영과 동일한 getDay() 기준을 재사용
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+function weekdayKo(ymd) {
+  return WEEKDAY_KO[new Date(`${ymd}T00:00:00`).getDay()];
 }
 // 간트 안내 문구 요소
 function ganttMessage(text) {
@@ -684,8 +690,19 @@ function renderGantt() {
     return;
   }
 
-  // 종료일 빠른 순 (목록과 동일 기준)
-  dated.sort((a, b) => a.endDate.localeCompare(b.endDate));
+  // 종료일 빠른 순 (목록과 동일 기준).
+  // 단, 막대를 드래그하는 동안에는 순서를 고정(ganttDragOrder)해 행이 실시간 재배치되지
+  // 않게 한다. 최종 정렬은 드래그 종료 후 renderTeamTasks()에서 한 번만 적용된다.
+  if (ganttDragOrder) {
+    const order = ganttDragOrder;
+    const rank = (id) => {
+      const i = order.indexOf(id);
+      return i === -1 ? order.length : i; // 고정 목록에 없는 새 항목은 뒤로
+    };
+    dated.sort((a, b) => rank(a.id) - rank(b.id));
+  } else {
+    dated.sort((a, b) => a.endDate.localeCompare(b.endDate));
+  }
 
   let dataMin = dated[0].startDate;
   let dataMax = dated[0].endDate;
@@ -757,7 +774,21 @@ function renderGantt() {
       const mark = dayMarkClass(period.start);
       if (mark) head.classList.add(mark);
     }
-    if (i % labelStep === 0 || i === todayIdx) head.textContent = period.label;
+    // 일/주 단위(자동이 일/주로 펼쳐질 때 포함)에는 요일을 함께 표시. 월 단위는 제외.
+    // 좁은 칸에서도 잘리지 않도록 날짜(윗줄)·요일(아랫줄) 두 줄로 세로로 쌓는다.
+    if (i % labelStep === 0 || i === todayIdx) {
+      if (unit === "month") {
+        head.textContent = period.label;
+      } else {
+        const dateLine = document.createElement("span");
+        dateLine.className = "gantt-head-date";
+        dateLine.textContent = period.label;
+        const dowLine = document.createElement("span");
+        dowLine.className = "gantt-head-dow";
+        dowLine.textContent = `(${weekdayKo(period.start)})`;
+        head.append(dateLine, dowLine);
+      }
+    }
     const range =
       period.start === period.end
         ? period.start
@@ -1005,6 +1036,11 @@ ganttEl.addEventListener("mousedown", (e) => {
 
   // 드래그 동안 축 고정 (데이터 변화로 칸이 늘거나 줄지 않도록)
   ganttDragRange = ganttAxis;
+  // 드래그 동안 행 순서도 고정 (현재 표시 순서 = 종료일 정렬 순서를 캡처)
+  ganttDragOrder = tasksCache
+    .filter((t) => t.startDate && t.endDate && t.endDate >= t.startDate)
+    .sort((a, b) => a.endDate.localeCompare(b.endDate))
+    .map((t) => t.id);
   let moved = false;
   let lastS = origStart;
   let lastE = origEnd;
@@ -1049,6 +1085,7 @@ ganttEl.addEventListener("mousedown", (e) => {
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
     ganttDragRange = null; // 축 고정 해제 (다음 렌더부터 정상 범위)
+    ganttDragOrder = null; // 순서 고정 해제 → 이후 렌더에서 종료일 기준 재정렬
 
     if (moved) {
       ganttBarDraggedAt = Date.now(); // 뒤따르는 click(수정 폼 열기) 억제

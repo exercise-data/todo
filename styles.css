@@ -811,6 +811,16 @@ body[data-auth="in"] .auth-screen {
   white-space: nowrap;
   overflow: visible; /* 좁은 칸에서도 라벨이 잘리지 않게 (라벨은 띄엄띄엄) */
 }
+/* 날짜+요일 두 줄 라벨 — 세로로 쌓아 좁은 칸에서도 가로 폭을 덜 쓰게 */
+.gantt-day-head .gantt-head-date,
+.gantt-day-head .gantt-head-dow {
+  display: block;
+  line-height: 1.15;
+}
+.gantt-day-head .gantt-head-dow {
+  font-size: 0.9em; /* 요일은 살짝 작게 */
+  opacity: 0.85;
+}
 
 /* 본문 칸 — 라벨이 여러 줄이면 행 높이가 늘어나도록 최소 높이만 지정 */
 .gantt-cell {
