@@ -3,12 +3,12 @@
 // 개인 영역을 "평면 할 일"에서 "프로젝트 > 세부 할일" 구조로 바꾸는 1단계.
 // 이번 단계는 개인 "프로젝트"만 만든다(세부 할일은 다음 단계 personalTasks).
 //
-// personalProjects 문서 필드: { ownerUid(=내 UID), name, category(키: research|lecture|study|daily), createdAt }
+// personalProjects 문서 필드: { ownerUid(=내 UID), name, category(키: daily 또는 추가 카테고리 id), createdAt }
 //  - 생성: 이름 + 카테고리. 이름이 공백이면 차단.
 //  - 목록: ownerUid == 내 UID 인 프로젝트만 onSnapshot.
 //  - 선택: 클릭하면 선택 상태 유지(다음 단계에서 그 프로젝트의 할일을 표시).
 //  - 수정: 이름·카테고리 변경 / 삭제: 확인 후 문서만 삭제(하위 연쇄 삭제는 다음 단계에서 연결).
-//  - 카테고리 필터(전체/업무/개인/공부)로 목록을 거른다.
+//  - 카테고리 필터(전체/일상/추가 카테고리)로 목록을 거른다.
 //
 // 인증/Firebase 앱은 auth.js 가 초기화한 것을 재사용한다(personal/team 모듈과 동일 패턴).
 
@@ -44,14 +44,11 @@ const db = getFirestore(app);
 
 const COLLECTION = "personalProjects";
 const TASKS_COLLECTION = "personalTasks"; // 연쇄 삭제 대상(세부 할일)
+const USERS = "users"; // 추가 카테고리(extraCategories)를 보관하는 본인 문서
 const SELECT_EVENT = "personal-project-selected"; // personalTasks.js 로 선택 변경 통지
-// 개인용 카테고리: 표시 이름(label) ↔ 내부 키(key) 분리. Firestore 에는 key 를 저장한다.
-const CATEGORIES = [
-  { key: "research", label: "연구" },
-  { key: "lecture", label: "강의" },
-  { key: "study", label: "공부" },
-  { key: "daily", label: "일상" },
-];
+// 개인용 기본 카테고리: 이제 "일상"(daily) 하나. 표시 이름(label) ↔ 내부 키(key) 분리(Firestore 에는 key 저장).
+// 추가 카테고리는 users/{uid}.extraCategories 에 사용자당 최대 3개까지 저장(personalCategories.js 가 관리).
+const CATEGORIES = [{ key: "daily", label: "일상" }];
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
 
 // ----- DOM 참조 -----
@@ -71,7 +68,67 @@ let projectsCache = [];
 let taskCounts = {}; // { [projectId]: { total, done } } — 즉석 계산용
 let editingId = null;
 let selectedId = null; // 선택된 프로젝트(세부 할일 조회에 사용)
-let currentFilter = "all"; // "all" | "research" | "lecture" | "study" | "daily"
+let currentFilter = "all"; // "all" | "daily" | 추가 카테고리 id
+let extraCategories = []; // 본인 추가 카테고리 [{id,name,color}] — users/{uid} 에서 읽음
+let userDocUnsub = null; // users/{uid} 문서 구독(추가 카테고리 실시간 반영)
+
+// 기본 + 추가 카테고리를 합친 목록: [{key,label,color?}] (color 는 추가 카테고리에만)
+function allCategories() {
+  return CATEGORIES.concat(
+    extraCategories.map((c) => ({ key: c.id, label: c.name || c.id, color: c.color }))
+  );
+}
+// 카테고리 키 → 표시 이름
+function labelFor(key) {
+  if (CATEGORY_LABEL[key]) return CATEGORY_LABEL[key];
+  const ex = extraCategories.find((c) => c.id === key);
+  return ex ? ex.name || ex.id : key || "";
+}
+// 추가 카테고리 색상(기본 카테고리는 CSS 로 색을 입히므로 null)
+function colorFor(key) {
+  const ex = extraCategories.find((c) => c.id === key);
+  return ex ? ex.color || null : null;
+}
+// hex 색 → rgba(연한 배경 틴트용). 잘못된 형식이면 원본 반환.
+function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return hex || "transparent";
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+// ----- 카테고리 필터 탭: 기본(전체/일상) 뒤에 추가 카테고리 탭을 이어서 렌더 -----
+// 기본 탭은 HTML 에 정적으로 있고, 추가 탭([data-extra])만 여기서 동적으로 붙였다 지운다.
+function renderFilterTabs() {
+  filterEl.querySelectorAll(".tab[data-extra]").forEach((t) => t.remove());
+  extraCategories.forEach((c) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tab";
+    btn.dataset.pcat = c.id;
+    btn.dataset.extra = "1";
+    btn.textContent = c.name || c.id;
+    const color = c.color || "#888";
+    btn.style.setProperty("--cat-color", color);
+    btn.style.setProperty("--cat-tint", hexToRgba(color, 0.14));
+    filterEl.append(btn);
+  });
+  filterEl
+    .querySelectorAll(".tab")
+    .forEach((t) => t.classList.toggle("is-active", t.dataset.pcat === currentFilter));
+}
+
+// ----- 프로젝트 생성 드롭다운: 기본 옵션 뒤에 추가 카테고리 옵션을 이어서 렌더 -----
+function renderCatOptions() {
+  catSelect.querySelectorAll("option[data-extra]").forEach((o) => o.remove());
+  extraCategories.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name || c.id;
+    opt.dataset.extra = "1";
+    catSelect.append(opt);
+  });
+}
 
 // ----- 메시지 -----
 function showError(msg) {
@@ -174,7 +231,7 @@ function renderPersonalProjects() {
       emptyRow(
         currentFilter === "all"
           ? "등록된 개인 프로젝트가 없습니다. 위에서 추가해 보세요."
-          : `'${CATEGORY_LABEL[currentFilter] || currentFilter}' 카테고리의 프로젝트가 없습니다.`
+          : `'${labelFor(currentFilter)}' 카테고리의 프로젝트가 없습니다.`
       )
     );
     return;
@@ -207,7 +264,10 @@ function renderPersonalProjects() {
     const badge = document.createElement("span");
     badge.className = "pcat-badge";
     badge.dataset.cat = proj.category || "";
-    badge.textContent = CATEGORY_LABEL[proj.category] || proj.category || "";
+    badge.textContent = labelFor(proj.category);
+    // 추가 카테고리는 CSS 매핑이 없으므로 자동 배정된 색을 인라인으로 적용
+    const badgeColor = colorFor(proj.category);
+    if (badgeColor) badge.style.background = badgeColor;
 
     const actions = document.createElement("div");
     actions.className = "pproj-actions";
@@ -266,6 +326,44 @@ function emptyRow(text) {
   return li;
 }
 
+// ----- 본인 users 문서 구독: 추가 카테고리(extraCategories) 실시간 반영 -----
+function subscribeUserDoc(uid) {
+  if (userDocUnsub) {
+    userDocUnsub();
+    userDocUnsub = null;
+  }
+  extraCategories = [];
+  if (!uid) {
+    renderFilterTabs();
+    renderCatOptions();
+    renderPersonalProjects();
+    return;
+  }
+  userDocUnsub = onSnapshot(
+    doc(db, USERS, uid),
+    (snap) => {
+      const data = snap.exists() ? snap.data() : {};
+      extraCategories = Array.isArray(data.extraCategories)
+        ? data.extraCategories
+        : [];
+      // 현재 필터가 사라진 추가 카테고리를 가리키면 전체로 되돌린다
+      if (
+        currentFilter !== "all" &&
+        !CATEGORY_LABEL[currentFilter] &&
+        !extraCategories.some((c) => c.id === currentFilter)
+      ) {
+        currentFilter = "all";
+      }
+      renderFilterTabs();
+      renderCatOptions();
+      renderPersonalProjects();
+    },
+    (err) => {
+      console.error("users 문서(추가 카테고리) 구독 실패:", err);
+    }
+  );
+}
+
 // 인라인 수정 폼 (이름 + 카테고리)
 function buildEditForm(proj) {
   const form = document.createElement("form");
@@ -281,7 +379,7 @@ function buildEditForm(proj) {
   const cat = document.createElement("select");
   cat.className = "input pproj-edit-cat";
   cat.setAttribute("aria-label", "카테고리 선택");
-  CATEGORIES.forEach((c) => {
+  allCategories().forEach((c) => {
     const opt = document.createElement("option");
     opt.value = c.key;
     opt.textContent = c.label;
@@ -460,9 +558,15 @@ onAuthStateChanged(auth, (user) => {
     countsUnsub();
     countsUnsub = null;
   }
+  if (userDocUnsub) {
+    userDocUnsub();
+    userDocUnsub = null;
+  }
   editingId = null;
   projectsCache = [];
   taskCounts = {};
+  extraCategories = [];
+  currentFilter = "all";
   setSelected(null);
   clearMessage();
 
@@ -470,9 +574,12 @@ onAuthStateChanged(auth, (user) => {
     currentUid = user.uid;
     subscribe(currentUid);
     subscribeTaskCounts(currentUid);
+    subscribeUserDoc(currentUid);
   } else {
     currentUid = null;
   }
+  renderFilterTabs();
+  renderCatOptions();
   renderPersonalProjects();
 });
 
@@ -493,4 +600,6 @@ if (viewSwitch) {
 }
 
 // 첫 렌더(로그인 전 안내)
+renderFilterTabs();
+renderCatOptions();
 renderPersonalProjects();

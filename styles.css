@@ -53,14 +53,13 @@ body {
   flex-shrink: 0; /* 헤더는 항상 고정 높이 */
 }
 
-/* 헤더 상단 행: 제목(좌) + 로그인 사용자 정보(우) */
+/* 헤더 상단 행: 제목 | 탭 | 데이터▾ | … | 계정▾ — 모두 한 행, 세로 가운데, 좁으면 wrap */
 .header-top {
-  margin: 0 0 12px;
+  margin: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 16px;
+  gap: 8px 14px;
 }
 
 /* ===== 1단계: 인증(로그인 화면 / 사용자 바) ===== */
@@ -130,46 +129,106 @@ body[data-auth="in"] .auth-screen {
   background: var(--primary-hover);
 }
 
-/* 헤더의 로그인 사용자 바 */
-.auth-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* ===== 헤더 드롭다운(데이터/계정) — <details>/<summary> 기반, JS 불필요·확장 용이 ===== */
+.hdr-menu {
+  position: relative;
 }
-
-.auth-user {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  line-height: 1.3;
+/* 계정 드롭다운은 한 행의 맨 오른쪽으로 밀착 */
+.account-menu {
+  margin-left: auto;
 }
-
-.auth-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.auth-uid-row {
-  display: flex;
+.hdr-menu-btn {
+  list-style: none; /* <summary> 기본 삼각형 마커 제거 */
+  cursor: pointer;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.auth-uid {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: var(--bg);
+  padding: 6px 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1px 6px;
-  user-select: all;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.88rem;
+  white-space: nowrap;
+  user-select: none;
+}
+.hdr-menu-btn::-webkit-details-marker {
+  display: none;
+}
+.hdr-menu-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.hdr-menu[open] > .hdr-menu-btn {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.hdr-caret {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.hdr-menu[open] .hdr-caret {
+  transform: rotate(180deg);
+}
+/* 펼침 패널 — 버튼 아래에 떠서 헤더 높이를 늘리지 않음 */
+.hdr-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(31, 36, 48, 0.12);
+}
+/* 데이터 메뉴는 왼쪽 기준으로 펼침(화면 왼쪽에 있으므로) */
+.data-menu .hdr-menu-panel {
+  left: 0;
+  right: auto;
 }
 
-.auth-copy-btn {
-  padding: 2px 8px;
-  font-size: 0.72rem;
+/* ===== 통일된 세로 메뉴(데이터·계정 공통) ===== */
+.hdr-menu-list {
+  min-width: 180px;
+  padding: 6px;
+  gap: 2px;
+}
+/* 데이터 메뉴: 현재 모드의 그룹만 표시되며 항목을 세로로 나열 */
+.hdr-menu-list .personal-data-tools,
+.hdr-menu-list .team-data-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* 메뉴 항목 — 내보내기/가져오기/로그아웃 공통(군더더기 테두리 없는 한 줄 항목) */
+.hdr-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.86rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hdr-menu-item:hover {
+  background: var(--bg);
+  color: var(--primary);
+}
+
+/* 계정 드롭다운 내부: 이름(요약) + "UID 복사"/"로그아웃" 텍스트 메뉴 항목.
+   UID 값은 화면에 노출하지 않고 #auth-uid(hidden)에 보관만 한다(복사용). */
+.account-summary .auth-name {
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 /* 헤더 하단 행: 카테고리 필터 탭(좌) + 데이터 백업·복원 도구(우) */
@@ -1021,6 +1080,183 @@ body[data-view-mode="manage"] .team-manage-screen {
 .team-manage-screen > * {
   flex-shrink: 0;
 }
+
+/* 관리 화면 좌우 2단: 왼쪽 '프로젝트 관리' + 오른쪽 '팀 관리'.
+   flex-wrap 으로 좁은 화면에선 자동으로 세로로 줄바꿈된다.
+   오른쪽 열이 숨겨지면(is-hidden → display:none) 왼쪽이 전체 폭을 차지한다. */
+.manage-layout {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+/* 왼쪽: 프로젝트 관리(골격) — 컴팩트한 폭 */
+.manage-projects-col {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.manage-projects-placeholder {
+  margin: 16px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* 팀 공용 카테고리 관리(관리자 전용) */
+.mcat-subtitle {
+  margin: 4px 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.mcat-team-target {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.mcat-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.mcat-name-input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 6px 10px;
+}
+.mcat-hint {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.mcat-hint.is-full {
+  color: var(--danger);
+}
+.mcat-msg {
+  margin: 8px 0 0;
+  font-size: 0.83rem;
+  color: var(--text-muted);
+}
+.mcat-msg:empty {
+  display: none;
+}
+.mcat-msg.is-error {
+  color: var(--danger);
+}
+.mcat-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 목록 항목 = 프로젝트 배지와 동일한 알약형 배지 하나(색만 다름) */
+.mcat-item {
+  display: inline-flex;
+  align-items: center;
+}
+.mcat-empty {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+}
+/* 팀 공용 카테고리 필터 탭 — 각 버튼을 그 카테고리 badge 색 계열로 표시한다.
+   비활성: 연한 틴트 배경 + 그 색 계열 글자/테두리 / 활성: 진한(채운) 색 배경 + 흰 글자.
+   '전체'(data-pcat="all")는 특정 카테고리가 아니므로 기본 중립색(흰/회색↔파랑) 그대로.
+   기본 연구/업무는 CSS 로 색을 지정하고, 추가 카테고리는 teamProjects.js 가 --cat-* 를 인라인 설정.
+   (개인용 필터는 .team-screen 스코프로 제외 — 다음 단계에서 개편.) */
+.team-screen .pproj-filter .tab[data-pcat="research"] {
+  --cat-color: var(--research);
+  --cat-tint: rgba(139, 92, 246, 0.14);
+}
+.team-screen .pproj-filter .tab[data-pcat="work"] {
+  --cat-color: var(--work);
+  --cat-tint: rgba(59, 110, 240, 0.14);
+}
+.team-screen .pproj-filter .tab[data-pcat="research"],
+.team-screen .pproj-filter .tab[data-pcat="work"],
+.team-screen .pproj-filter .tab[data-extra] {
+  background: var(--cat-tint);
+  border-color: var(--cat-color);
+  color: var(--cat-color);
+}
+.team-screen .pproj-filter .tab[data-pcat="research"]:hover,
+.team-screen .pproj-filter .tab[data-pcat="work"]:hover,
+.team-screen .pproj-filter .tab[data-extra]:hover {
+  border-color: var(--cat-color);
+  color: var(--cat-color);
+}
+.team-screen .pproj-filter .tab[data-pcat="research"].is-active,
+.team-screen .pproj-filter .tab[data-pcat="work"].is-active,
+.team-screen .pproj-filter .tab[data-extra].is-active {
+  background: var(--cat-color);
+  border-color: var(--cat-color);
+  color: #fff;
+}
+
+/* '전체' 필터는 특정 카테고리가 아니므로 무채색(검정/진회색 계열)으로 한다.
+   어떤 카테고리 색(연구=보라/업무=파랑/추가=초록 등)과도 겹치지 않게 하여,
+   선택 시 파란색이 되어 '업무'와 헷갈리던 문제를 없앤다.
+   팀·개인 공통 규칙(개인용 필터에도 동일 적용). */
+.pproj-filter .tab[data-pcat="all"] {
+  background: #fff;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+.pproj-filter .tab[data-pcat="all"]:hover {
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+.pproj-filter .tab[data-pcat="all"].is-active {
+  background: #374151; /* 진회색 — 무채색 강조 */
+  border-color: #374151;
+  color: #fff;
+}
+
+/* 개인용 카테고리 필터 탭 — 팀 공용과 동일한 색 규칙. 기본 '일상'은 teal, 추가는 --cat-* 인라인.
+   '전체'는 위의 공통 무채색 규칙을 그대로 쓴다. */
+.personal-screen .pproj-filter .tab[data-pcat="daily"] {
+  --cat-color: #2bb8c4;
+  --cat-tint: rgba(43, 184, 196, 0.14);
+}
+.personal-screen .pproj-filter .tab[data-pcat="daily"],
+.personal-screen .pproj-filter .tab[data-extra] {
+  background: var(--cat-tint);
+  border-color: var(--cat-color);
+  color: var(--cat-color);
+}
+.personal-screen .pproj-filter .tab[data-pcat="daily"]:hover,
+.personal-screen .pproj-filter .tab[data-extra]:hover {
+  border-color: var(--cat-color);
+  color: var(--cat-color);
+}
+.personal-screen .pproj-filter .tab[data-pcat="daily"].is-active,
+.personal-screen .pproj-filter .tab[data-extra].is-active {
+  background: var(--cat-color);
+  border-color: var(--cat-color);
+  color: #fff;
+}
+
+/* 개인용 카테고리 관리 섹션 — 위의 팀 카테고리 섹션과 구분선으로 나눈다 */
+.pcatm {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+/* 오른쪽: 팀 관리 — 관리 기능 패널들을 세로로 쌓는다(남는 폭을 더 차지) */
+.manage-team-col {
+  flex: 2 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.manage-team-col > * {
+  flex-shrink: 0;
+}
+.manage-col-title {
+  margin: 0 0 var(--gap);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
 .manage-select-bar {
   flex-shrink: 0;
   display: flex;
@@ -1113,6 +1349,15 @@ body[data-view-mode="manage"] .team-manage-screen {
   margin-bottom: 0;
   min-width: 0;
 }
+/* 상단 행(팀 선택 + 팀 가입 신청)은 바로 아래 .team-layout 과 동일한 그리드(340px 1fr,
+   같은 gap)를 써서 위아래 두 박스의 좌우 경계를 세로로 정확히 일치시킨다.
+   align-items:stretch 로 두 박스 높이도 서로 맞춘다(좁으면 아래 미디어쿼리에서 1열로 줄바꿈). */
+.team-top-row {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: var(--gap);
+  align-items: stretch;
+}
 /* 팀 선택 바·새 팀 만들기는 내용폭으로 컴팩트하게, 가입신청/팀관리가 남는 폭을 차지 */
 .team-top-row > .team-select-bar,
 .team-admin-row > .create-team-form {
@@ -1142,10 +1387,6 @@ body[data-view-mode="manage"] .team-manage-screen {
   width: auto;
   min-width: 180px;
   padding: 6px 10px;
-}
-.team-select-hint {
-  font-size: 0.8rem;
-  color: var(--text-muted);
 }
 
 /* 새 팀 만들기 (슈퍼관리자 전용) — '팀 관리' 탭에 패널 형태로 배치 */
@@ -1473,11 +1714,22 @@ body[data-view-mode="manage"] .team-manage-screen {
   border-radius: 8px;
   padding: 8px 12px;
 }
-.ta-member-uid {
+.ta-member-ident {
   flex: 1;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   overflow-wrap: anywhere;
+}
+.ta-member-name {
+  font-weight: 600;
+}
+.ta-member-email {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.ta-uid-copy {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 0.72rem;
 }
 .ta-you-badge {
   font-size: 0.68rem;
@@ -1726,9 +1978,12 @@ body[data-view-mode="personal"] .team-data-tools {
 body[data-view-mode="team"] .personal-data-tools {
   display: none;
 }
-/* 팀 관리 모드: 데이터 백업/복원 도구는 숨김(관리 전용 화면) */
+/* 팀 관리 모드: 데이터 백업/복원 도구는 숨김(관리 전용 화면) — 드롭다운 자체를 숨겨 빈 메뉴 방지 */
 body[data-view-mode="manage"] .personal-data-tools,
 body[data-view-mode="manage"] .team-data-tools {
+  display: none;
+}
+body[data-view-mode="manage"] .data-menu {
   display: none;
 }
 
@@ -1996,15 +2251,21 @@ body[data-view-mode="manage"] .team-data-tools {
 
   .layout,
   .personal-screen,
-  .team-layout {
+  .team-layout,
+  .team-top-row {
     grid-template-columns: 1fr;
     overflow: visible;
   }
 
-  /* 팀/팀관리 화면도 내부 스크롤 대신 페이지 스크롤 사용 */
+  /* 팀/관리 화면도 내부 스크롤 대신 페이지 스크롤 사용 */
   .team-screen,
   .team-manage-screen {
     overflow: visible;
+  }
+  /* 관리 화면 좌우 2단은 좁은 화면에서 세로로 쌓기(각 열이 전체 폭 차지) */
+  .manage-projects-col,
+  .manage-team-col {
+    flex: 1 1 100%;
   }
   .team-layout {
     min-height: 0;

@@ -24,12 +24,15 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
+// 세션이 있어도 항상 계정 선택 화면을 띄운다(계정 변경/로그인 공통) — 다른 구글 계정 전환 용이.
+provider.setCustomParameters({ prompt: "select_account" });
 
 // DOM 참조
 const body = document.body;
 const loginBtn = document.getElementById("login-btn");
 const logoutBtn = document.getElementById("logout-btn");
 const copyBtn = document.getElementById("copy-uid-btn");
+const switchBtn = document.getElementById("switch-account-btn");
 const nameEl = document.getElementById("auth-name");
 const uidEl = document.getElementById("auth-uid");
 const errEl = document.getElementById("auth-error");
@@ -55,16 +58,32 @@ logoutBtn.addEventListener("click", async () => {
   }
 });
 
+// 계정 변경 → 현재 계정을 로그아웃한 뒤 계정 선택 창을 띄워 다른 구글 계정으로 로그인.
+// provider 에 prompt:'select_account' 가 적용돼 있어 세션이 있어도 선택 화면이 뜬다.
+// 로그인 성공 후의 화면·데이터 갱신은 onAuthStateChanged(및 각 모듈의 구독)이 담당한다.
+switchBtn.addEventListener("click", async () => {
+  errEl.textContent = "";
+  try {
+    await signOut(auth);
+    await signInWithPopup(auth, provider);
+  } catch (err) {
+    console.error("계정 변경 실패:", err);
+    errEl.textContent = "계정 변경에 실패했습니다: " + (err?.message || err);
+  }
+});
+
 // UID 복사(관리자 등록에 사용)
 copyBtn.addEventListener("click", async () => {
   const uid = uidEl.textContent.trim();
   if (!uid) return;
+  const original = copyBtn.textContent; // 아이콘(📋) 유지 — 복사 후 원래 아이콘으로 복원
   try {
     await navigator.clipboard.writeText(uid);
+    // 팀원 관리의 "UID 복사"와 동일한 피드백: "복사됨" 문구를 잠깐 표시
     copyBtn.textContent = "복사됨";
     setTimeout(() => {
-      copyBtn.textContent = "복사";
-    }, 1500);
+      copyBtn.textContent = original;
+    }, 1200);
   } catch (err) {
     console.error("UID 복사 실패:", err);
     // 클립보드 API가 막힌 환경(예: file://)을 위한 대비: 텍스트 선택

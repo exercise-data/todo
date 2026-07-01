@@ -32,6 +32,47 @@ service cloud.firestore {
       return isTeamMember(teamId)
         && get(/databases/$(database)/documents/memberships/$(membershipId(teamId))).data.role == 'admin';
     }
+    // 슈퍼관리자(특정 UID) — 새 팀 생성 및 첫 admin 소속 시드 허용(부트스트랩)
+    function isSuperAdmin() {
+      return request.auth != null
+        && request.auth.uid == 'NiNrcxpjoOTfr9dPLvq9jz3L8eK2';
+    }
+
+    // 팀(teams) — 표시 이름 등 팀 메타. 생성/수정/삭제는 슈퍼관리자만.
+    //   필드: { name, createdBy, createdAt }. 읽기는 로그인 사용자 누구나.
+    match /teams/{teamId} {
+      allow read: if request.auth != null;
+      allow create: if isSuperAdmin()
+                    && request.resource.data.createdBy == request.auth.uid;
+      // 팀명(name) 변경: 슈퍼관리자(모든 팀) 또는 그 팀의 관리자(자기 팀). teamId(문서 id)는 바뀔 수 없음.
+      allow update: if isSuperAdmin() || isTeamAdmin(teamId);
+      // 삭제는 슈퍼관리자만. 팀 삭제 시 하위 데이터(teamTasks/teamProjects/memberships/joinRequests)도
+      // 함께 지워야 하므로 아래 각 컬렉션의 delete 규칙에도 isSuperAdmin() 을 허용한다.
+      allow delete: if isSuperAdmin();
+    }
+
+    // 9단계: 팀 가입 신청(joinRequests) — 문서 id "{uid}_{teamId}"
+    //   필드: { uid, teamId, displayName, email, message, status, consentAt, createdAt }
+    //   읽기: 본인 신청 문서 OR 그 팀 관리자(다음 단계: 명단 조회·처리).
+    //   생성: 본인(uid==auth.uid)만. 문서 id 는 "{uid}_{teamId}", status 는 "pending" 이어야 함.
+    //   삭제: 본인(철회) OR 그 팀 관리자.
+    //   수정: 그 팀 관리자만(다음 단계: 승인/반려 처리).
+    match /joinRequests/{reqId} {
+      allow read: if request.auth != null
+                  && (resource.data.uid == request.auth.uid
+                      || isTeamAdmin(resource.data.teamId)
+                      || isSuperAdmin());
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && reqId == request.resource.data.uid + '_' + request.resource.data.teamId
+                    && request.resource.data.status == 'pending';
+      allow update: if isTeamAdmin(resource.data.teamId);
+      // 삭제: 본인(철회) OR 그 팀 관리자 OR 슈퍼관리자(팀 삭제 시 연쇄 삭제).
+      allow delete: if request.auth != null
+                    && (resource.data.uid == request.auth.uid
+                        || isTeamAdmin(resource.data.teamId)
+                        || isSuperAdmin());
+    }
 
     // 1단계: 본인 사용자 문서만 읽기/쓰기
     match /users/{uid} {
@@ -45,39 +86,46 @@ service cloud.firestore {
     match /memberships/{mId} {
       allow read: if request.auth != null
                   && (resource.data.uid == request.auth.uid
-                      || isTeamAdmin(resource.data.teamId));
-      allow create: if isTeamAdmin(request.resource.data.teamId)
+                      || isTeamAdmin(resource.data.teamId)
+                      || isSuperAdmin());
+      // 그 팀의 관리자만 추가 가능. 단, 슈퍼관리자는 새 팀의 첫 admin(자기 자신)을 시드할 수 있음(부트스트랩).
+      allow create: if (isTeamAdmin(request.resource.data.teamId)
+                        || (isSuperAdmin()
+                            && request.resource.data.uid == request.auth.uid))
                     && mId == request.resource.data.uid + '_' + request.resource.data.teamId;
       allow update: if isTeamAdmin(resource.data.teamId)
                     && request.resource.data.teamId == resource.data.teamId
                     && request.resource.data.uid == resource.data.uid;
-      allow delete: if isTeamAdmin(resource.data.teamId);
+      // 삭제: 그 팀 관리자 OR 슈퍼관리자(팀 삭제 시 연쇄 삭제).
+      allow delete: if isTeamAdmin(resource.data.teamId) || isSuperAdmin();
     }
 
     // 4단계: 팀 프로젝트(teamProjects) — 해당 팀의 팀원이면 읽기/쓰기 가능
     //   필드: { teamId, name, category, createdBy, createdAt }
     match /teamProjects/{projectId} {
-      allow read: if isTeamMember(resource.data.teamId);
+      allow read: if isTeamMember(resource.data.teamId) || isSuperAdmin();
       allow create: if isTeamMember(request.resource.data.teamId)
                     && request.resource.data.createdBy == request.auth.uid;
       // 수정/삭제는 팀원이면 누구나(teamId 변경 금지)
       allow update: if isTeamMember(resource.data.teamId)
                     && isTeamMember(request.resource.data.teamId)
                     && request.resource.data.teamId == resource.data.teamId;
-      allow delete: if isTeamMember(resource.data.teamId);
+      // 삭제: 팀원 OR 슈퍼관리자(팀 삭제 시 연쇄 삭제).
+      allow delete: if isTeamMember(resource.data.teamId) || isSuperAdmin();
     }
 
     // 3·4단계: 팀 공용 할 일(teamTasks) — 해당 팀의 팀원이면 읽기/쓰기 가능
     //   필드: { teamId, projectId, title, startDate, endDate, completed, createdBy, createdAt }
     match /teamTasks/{taskId} {
-      allow read: if isTeamMember(resource.data.teamId);
+      allow read: if isTeamMember(resource.data.teamId) || isSuperAdmin();
       allow create: if isTeamMember(request.resource.data.teamId)
                     && request.resource.data.createdBy == request.auth.uid;
       // 수정/삭제는 팀원이면 누구나(teamId 변경 금지)
       allow update: if isTeamMember(resource.data.teamId)
                     && isTeamMember(request.resource.data.teamId)
                     && request.resource.data.teamId == resource.data.teamId;
-      allow delete: if isTeamMember(resource.data.teamId);
+      // 삭제: 팀원 OR 슈퍼관리자(팀 삭제 시 연쇄 삭제).
+      allow delete: if isTeamMember(resource.data.teamId) || isSuperAdmin();
     }
 
     // 개인 프로젝트(personalProjects) — ownerUid 가 본인인 문서만 접근

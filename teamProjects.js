@@ -81,6 +81,26 @@ let taskCounts = {}; // { [projectId]: { total, done } }
 let editingId = null;
 let selectedProjectId = null;
 let currentFilter = "all";
+let extraCategories = []; // 선택된 팀의 추가 카테고리 [{id,name,color}] — teams 문서에서 읽음
+let teamDocUnsub = null; // 선택된 팀 문서(teams/{teamId}) 구독(추가 카테고리 실시간 반영)
+
+// 기본 + 추가 카테고리를 합친 목록: [{key,label,color?}] (color 는 추가 카테고리에만)
+function allCategories() {
+  return CATEGORIES.concat(
+    extraCategories.map((c) => ({ key: c.id, label: c.name || c.id, color: c.color }))
+  );
+}
+// 카테고리 키 → 표시 이름(기본 라벨 또는 추가 카테고리 이름)
+function labelFor(key) {
+  if (CATEGORY_LABEL[key]) return CATEGORY_LABEL[key];
+  const ex = extraCategories.find((c) => c.id === key);
+  return ex ? ex.name || ex.id : key || "";
+}
+// 추가 카테고리 색상(기본 카테고리는 CSS 로 색을 입히므로 null 반환)
+function colorFor(key) {
+  const ex = extraCategories.find((c) => c.id === key);
+  return ex ? ex.color || null : null;
+}
 
 // ----- 메시지 -----
 function showError(msg) {
@@ -144,6 +164,50 @@ function renderTeamSelect() {
     opt.textContent = t.teamName || t.teamId;
     if (t.teamId === selectedTeamId) opt.selected = true;
     selectEl.append(opt);
+  });
+}
+
+// hex 색 → rgba(연한 배경 틴트용). 잘못된 형식이면 원본 반환.
+function hexToRgba(hex, alpha) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return hex || "transparent";
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+// ----- 카테고리 필터 탭: 기본(전체/연구/업무) 뒤에 추가 카테고리 탭을 이어서 렌더 -----
+// 기본 탭은 HTML 에 정적으로 있고, 추가 탭([data-extra])만 여기서 동적으로 붙였다 지운다.
+// 기존 '연구'·'업무' 와 같은 알약형 .tab 을 그대로 쓰되, 자동 배정 색만 CSS 변수로 넘겨
+// 색상으로만 구분한다(점(●) 없음). 활성/비활성 전환은 CSS 가 --cat-color 로 처리한다.
+function renderFilterTabs() {
+  filterEl.querySelectorAll(".tab[data-extra]").forEach((t) => t.remove());
+  extraCategories.forEach((c) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tab";
+    btn.dataset.pcat = c.id;
+    btn.dataset.extra = "1";
+    btn.textContent = c.name || c.id;
+    const color = c.color || "#888";
+    btn.style.setProperty("--cat-color", color);
+    btn.style.setProperty("--cat-tint", hexToRgba(color, 0.14));
+    filterEl.append(btn);
+  });
+  // 활성 표시 동기화(재빌드 후에도 현재 필터 유지)
+  filterEl
+    .querySelectorAll(".tab")
+    .forEach((t) => t.classList.toggle("is-active", t.dataset.pcat === currentFilter));
+}
+
+// ----- 프로젝트 생성 드롭다운: 기본 옵션 뒤에 추가 카테고리 옵션을 이어서 렌더 -----
+function renderCatOptions() {
+  catSelect.querySelectorAll("option[data-extra]").forEach((o) => o.remove());
+  extraCategories.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name || c.id;
+    opt.dataset.extra = "1";
+    catSelect.append(opt);
   });
 }
 
@@ -216,7 +280,7 @@ function renderProjects() {
       emptyRow(
         currentFilter === "all"
           ? "이 팀에 등록된 프로젝트가 없습니다. 위에서 추가해 보세요."
-          : `'${CATEGORY_LABEL[currentFilter] || currentFilter}' 카테고리의 프로젝트가 없습니다.`
+          : `'${labelFor(currentFilter)}' 카테고리의 프로젝트가 없습니다.`
       )
     );
     return;
@@ -250,7 +314,10 @@ function renderProjects() {
     const badge = document.createElement("span");
     badge.className = "pcat-badge";
     badge.dataset.cat = proj.category || "";
-    badge.textContent = CATEGORY_LABEL[proj.category] || proj.category || "";
+    badge.textContent = labelFor(proj.category);
+    // 추가 카테고리는 CSS 매핑이 없으므로 자동 배정된 색을 인라인으로 적용
+    const badgeColor = colorFor(proj.category);
+    if (badgeColor) badge.style.background = badgeColor;
 
     const actions = document.createElement("div");
     actions.className = "pproj-actions";
@@ -300,7 +367,7 @@ function buildEditForm(proj) {
   const cat = document.createElement("select");
   cat.className = "input pproj-edit-cat";
   cat.setAttribute("aria-label", "카테고리 선택");
-  CATEGORIES.forEach((c) => {
+  allCategories().forEach((c) => {
     const opt = document.createElement("option");
     opt.value = c.key;
     opt.textContent = c.label;
@@ -327,8 +394,10 @@ function buildEditForm(proj) {
 selectEl.addEventListener("change", () => {
   selectedTeamId = selectEl.value || null;
   editingId = null;
+  currentFilter = "all"; // 팀마다 추가 카테고리 id 가 다르므로 필터를 전체로 초기화
   setSelectedProject(null); // 팀이 바뀌면 프로젝트 선택 초기화
   clearMessage();
+  subscribeTeamDoc(selectedTeamId);
   subscribeProjects(selectedTeamId);
   subscribeTaskCounts(selectedTeamId);
   renderProjects();
@@ -494,6 +563,44 @@ function subscribeProjects(teamId) {
   );
 }
 
+// ----- 선택된 팀 문서 구독: 추가 카테고리(extraCategories) 실시간 반영 -----
+function subscribeTeamDoc(teamId) {
+  if (teamDocUnsub) {
+    teamDocUnsub();
+    teamDocUnsub = null;
+  }
+  extraCategories = [];
+  if (!teamId) {
+    renderFilterTabs();
+    renderCatOptions();
+    renderProjects();
+    return;
+  }
+  teamDocUnsub = onSnapshot(
+    doc(db, TEAMS, teamId),
+    (snap) => {
+      const data = snap.exists() ? snap.data() : {};
+      extraCategories = Array.isArray(data.extraCategories)
+        ? data.extraCategories
+        : [];
+      // 현재 필터가 사라진 추가 카테고리를 가리키면 전체로 되돌린다
+      if (
+        currentFilter !== "all" &&
+        !CATEGORY_LABEL[currentFilter] &&
+        !extraCategories.some((c) => c.id === currentFilter)
+      ) {
+        currentFilter = "all";
+      }
+      renderFilterTabs();
+      renderCatOptions();
+      renderProjects();
+    },
+    (err) => {
+      console.error("팀 문서(추가 카테고리) 구독 실패:", err);
+    }
+  );
+}
+
 // ----- 진도율 계산용: 선택된 팀의 teamTasks 를 projectId 별로 집계 -----
 function subscribeTaskCounts(teamId) {
   if (countsUnsub) {
@@ -544,7 +651,9 @@ function subscribeMemberships(uid) {
       // 선택 팀 유지/초기화
       if (!selectedTeamId || !seen.has(selectedTeamId)) {
         selectedTeamId = myTeams.length ? myTeams[0].teamId : null;
+        currentFilter = "all"; // 팀 전환 시 필터 초기화(추가 카테고리 id 는 팀마다 다름)
         setSelectedProject(null);
+        subscribeTeamDoc(selectedTeamId);
         subscribeProjects(selectedTeamId);
         subscribeTaskCounts(selectedTeamId);
       }
@@ -573,10 +682,16 @@ onAuthStateChanged(auth, (user) => {
     countsUnsub();
     countsUnsub = null;
   }
+  if (teamDocUnsub) {
+    teamDocUnsub();
+    teamDocUnsub = null;
+  }
   myTeams = [];
   selectedTeamId = null;
   projectsCache = [];
   taskCounts = {};
+  extraCategories = [];
+  currentFilter = "all";
   editingId = null;
   setSelectedProject(null);
   clearMessage();
@@ -588,9 +703,13 @@ onAuthStateChanged(auth, (user) => {
     currentUid = null;
   }
   renderTeamSelect();
+  renderFilterTabs();
+  renderCatOptions();
   renderProjects();
 });
 
 // 첫 렌더(로그인 전)
 renderTeamSelect();
+renderFilterTabs();
+renderCatOptions();
 renderProjects();

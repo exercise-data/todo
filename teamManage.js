@@ -54,6 +54,8 @@ const DELETE_BATCH_LIMIT = 450; // writeBatch 한도(500) 안전 마진
 // ----- DOM 참조 -----
 const root = document.querySelector(".team-manage-screen");
 const manageTabBtn = document.querySelector(".team-manage-tab");
+// 오른쪽 '팀 관리' 열 — 슈퍼관리자/팀관리자에게만 표시. 왼쪽 '프로젝트 관리'는 항상 표시.
+const teamCol = root.querySelector(".manage-team-col");
 const selectEl = root.querySelector(".admin-team-select");
 const createTeamForm = root.querySelector(".create-team-form");
 const createTeamIdInput = root.querySelector(".create-team-id");
@@ -72,6 +74,8 @@ const dangerMsg = root.querySelector(".team-danger-msg");
 
 // ----- 상태 -----
 let currentUid = null;
+let currentDisplayName = ""; // 부트스트랩 멤버십에 본인 이름 저장용
+let currentEmail = ""; // 부트스트랩 멤버십에 본인 이메일 저장용
 let isSuper = false;
 let teamsCache = []; // [{ teamId, name }] (전체)
 let myAdminTeamIds = new Set(); // 내가 admin 인 팀
@@ -104,17 +108,18 @@ function manageableTeams() {
 }
 
 // ----- 탭 표시/숨김 -----
-function updateTabVisibility(authorized) {
+// '관리' 탭은 로그인한 모든 사용자에게 보인다(왼쪽 '프로젝트 관리'는 누구나 사용).
+function updateTabVisibility(loggedIn) {
   if (!manageTabBtn) return;
-  manageTabBtn.classList.toggle("is-hidden", !authorized);
-  // 권한이 사라졌는데 '팀 관리' 탭을 보고 있으면 '팀 공용'으로 전환
-  if (
-    !authorized &&
-    document.body.getAttribute("data-view-mode") === "manage"
-  ) {
-    const teamBtn = document.querySelector('.vbtn[data-mode="team"]');
-    if (teamBtn) teamBtn.click();
-  }
+  manageTabBtn.classList.toggle("is-hidden", !loggedIn);
+}
+
+// ----- 오른쪽 '팀 관리' 열 표시/숨김 -----
+// 슈퍼관리자 또는 어느 팀이든 admin 인 사용자(팀 관리자)에게만 보인다.
+// 일반 사용자는 왼쪽 '프로젝트 관리'만 보고, 오른쪽 열은 아예 표시되지 않는다.
+function updateTeamColVisibility(authorized) {
+  if (!teamCol) return;
+  teamCol.classList.toggle("is-hidden", !authorized);
 }
 
 // ----- 새 팀 만들기 표시/숨김 (슈퍼관리자 전용) -----
@@ -196,7 +201,8 @@ function showRenameMsg(msg, isError) {
 // ----- 전체 렌더 -----
 function render() {
   const authorized = !!currentUid && (isSuper || myAdminTeamIds.size > 0);
-  updateTabVisibility(authorized);
+  updateTabVisibility(!!currentUid); // 탭: 로그인 사용자 전원
+  updateTeamColVisibility(authorized); // 오른쪽 팀 관리 열: 관리자만
   updateCreateTeamVisibility();
   renderSelect();
 }
@@ -421,6 +427,8 @@ createTeamForm.addEventListener("submit", async (e) => {
       teamId,
       role: "admin",
       teamName: name,
+      displayName: currentDisplayName, // 팀원 목록에 "이름 (이메일)" 로 표시되도록 본인 정보 저장
+      email: currentEmail,
     });
 
     createTeamForm.reset();
@@ -505,11 +513,15 @@ onAuthStateChanged(auth, (user) => {
 
   if (user) {
     currentUid = user.uid;
+    currentDisplayName = user.displayName || "";
+    currentEmail = user.email || "";
     isSuper = currentUid === SUPER_ADMIN_UID;
     subscribeTeams();
     subscribeMemberships(currentUid);
   } else {
     currentUid = null;
+    currentDisplayName = "";
+    currentEmail = "";
     isSuper = false;
   }
   render();

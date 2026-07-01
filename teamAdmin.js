@@ -58,6 +58,8 @@ const toggleEl = root.querySelector(".team-admin-toggle");
 const formEl = root.querySelector(".team-admin-form");
 const uidInput = root.querySelector(".ta-uid-input");
 const roleSelect = root.querySelector(".ta-role-select");
+// UID로 팀원 추가 안내문 — 폼과 함께 슈퍼관리자에게만 노출
+const hintEl = root.querySelector(".team-admin-hint");
 const errorEl = root.querySelector(".team-admin-error");
 const listEl = root.querySelector(".team-admin-list");
 // 가입 신청 현황(독립 아코디언 패널)
@@ -95,6 +97,11 @@ function showPanel() {
   // "팀 관리" 와 "가입 신청 현황"(독립 아코디언) 둘 다 관리자에게만 노출
   adminPanel.classList.remove("is-hidden");
   reqPanel.classList.remove("is-hidden");
+  // "UID로 팀원 추가"(폼+안내문)는 슈퍼관리자 전용 — 일반 팀 관리자에겐 숨긴다.
+  // (일반 팀원은 가입 신청-승인으로 받고, 슈퍼관리자만 새 팀 첫 관리자 지정용으로 사용.)
+  const superOnly = currentUid === SUPER_ADMIN_UID;
+  if (formEl) formEl.classList.toggle("is-hidden", !superOnly);
+  if (hintEl) hintEl.classList.toggle("is-hidden", !superOnly);
 }
 function hidePanel() {
   adminPanel.classList.add("is-hidden");
@@ -114,10 +121,12 @@ function renderMembers() {
     return;
   }
 
-  // 관리자 먼저, 그다음 uid 순
+  // 관리자 먼저, 그다음 이름(없으면 이메일·UID) 순
   const sorted = [...membersCache].sort((a, b) => {
     if (a.role !== b.role) return a.role === "admin" ? -1 : 1;
-    return (a.uid || "").localeCompare(b.uid || "");
+    const an = a.displayName || a.email || a.uid || "";
+    const bn = b.displayName || b.email || b.uid || "";
+    return an.localeCompare(bn, "ko");
   });
 
   sorted.forEach((m) => {
@@ -126,15 +135,42 @@ function renderMembers() {
     li.dataset.id = m.id;
     li.dataset.uid = m.uid || "";
 
-    const uid = document.createElement("code");
-    uid.className = "ta-member-uid";
-    uid.textContent = m.uid || "(uid 없음)";
+    // 이름 (이메일) — memberships 의 displayName·email 사용. UID 는 평소 크게 노출하지 않음.
+    const ident = document.createElement("div");
+    ident.className = "ta-member-ident";
+
+    const displayName = m.displayName || "";
+    const email = m.email || "";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "ta-member-name";
+    nameSpan.textContent =
+      !displayName && !email
+        ? "(이름 미등록)" // 예외: 이름·이메일이 없는 멤버십도 화면이 깨지지 않게 안전 표시
+        : displayName || "(이름 없음)";
+    ident.append(nameSpan);
+
+    if (email) {
+      const emailSpan = document.createElement("span");
+      emailSpan.className = "ta-member-email";
+      emailSpan.textContent = ` (${email})`;
+      ident.append(emailSpan);
+    }
+
     if (m.uid === currentUid) {
       const you = document.createElement("span");
       you.className = "ta-you-badge";
       you.textContent = "나";
-      uid.append(" ", you);
+      ident.append(" ", you);
     }
+
+    // 필요 시 그 팀원의 UID 를 복사(작은 버튼). 평소에는 UID 를 노출하지 않는다.
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "btn btn-cancel ta-uid-copy";
+    copyBtn.dataset.action = "copy-uid";
+    copyBtn.title = "이 팀원의 UID 복사";
+    copyBtn.textContent = "UID 복사";
 
     const role = document.createElement("select");
     role.className = "input ta-member-role";
@@ -153,10 +189,36 @@ function renderMembers() {
     removeBtn.dataset.action = "remove";
     removeBtn.textContent = "제거";
 
-    li.append(uid, role, removeBtn);
+    li.append(ident, copyBtn, role, removeBtn);
     listEl.append(li);
   });
 }
+
+// UID 복사(클립보드) — 막힌 환경 대비 폴백 포함
+async function copyUidText(text, btn) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    console.error("UID 복사 실패:", err);
+  }
+  if (btn) {
+    const prev = btn.textContent;
+    btn.textContent = "복사됨";
+    setTimeout(() => {
+      btn.textContent = prev;
+    }, 1200);
+  }
+}
+
+// ----- 팀원 UID 복사 -----
+listEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-action='copy-uid']");
+  if (!btn) return;
+  const li = e.target.closest(".ta-member");
+  if (!li) return;
+  copyUidText(li.dataset.uid, btn);
+});
 
 // ----- 팀원 추가 -----
 formEl.addEventListener("submit", async (e) => {
@@ -393,6 +455,9 @@ reqListEl.addEventListener("click", async (e) => {
     try {
       // 팀원 추가 + 신청 제거를 원자적으로 처리(둘 다 관리자에게 허용됨)
       const member = { uid: applicantUid, teamId: currentTeamId, role: "member" };
+      // 신청서(joinRequests)의 이름·이메일을 멤버십에 함께 옮겨 저장(목록 표시용)
+      if (req && req.displayName) member.displayName = req.displayName;
+      if (req && req.email) member.email = req.email;
       if (myTeamName) member.teamName = myTeamName; // 팀 이름을 알면 함께 저장(선택)
       const batch = writeBatch(db);
       batch.set(

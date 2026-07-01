@@ -20,46 +20,50 @@
   <!-- 앱 본체 (로그인 상태에서만 표시) -->
   <div class="app-shell">
   <header class="app-header">
+    <!-- 헤더를 한 행으로: 제목 | 탭 | 데이터▾ | … | 계정▾ -->
     <div class="header-top">
       <h1 class="app-title">할 일 관리</h1>
       <!-- 상단 화면 전환: 개인용 / 팀 공용 (둘 다 Firestore) -->
       <nav class="view-switch" role="tablist" aria-label="화면 전환">
         <button type="button" class="vbtn is-active" data-mode="personal" role="tab" aria-selected="true">개인용</button>
         <button type="button" class="vbtn" data-mode="team" role="tab" aria-selected="false">팀 공용</button>
-        <!-- 팀 관리 탭: 슈퍼관리자/팀관리자에게만 보임(teamManage.js 가 is-hidden 토글) -->
-        <button type="button" class="vbtn team-manage-tab is-hidden" data-mode="manage" role="tab" aria-selected="false">팀 관리</button>
+        <!-- 관리 탭: 로그인한 모든 사용자에게 보임(왼쪽 '프로젝트 관리'는 누구나 사용).
+             오른쪽 '팀 관리' 열은 슈퍼관리자/팀관리자에게만 표시된다(teamManage.js 가 토글). -->
+        <button type="button" class="vbtn team-manage-tab is-hidden" data-mode="manage" role="tab" aria-selected="false">관리</button>
       </nav>
-      <!-- 1단계) 로그인 사용자 표시: 이름 + UID(복사 가능) + 로그아웃 -->
-      <div class="auth-bar">
-        <!-- 7단계) 데이터 백업/복원 — 영역 전체(개인용/선택 팀)를 다루는 전역 기능이라 상단 우측에.
-             현재 화면 모드(data-view-mode)에 따라 개인용/팀용 중 하나만 보인다(CSS 토글). -->
-        <div class="header-data-tools">
-          <div class="data-tools personal-data-tools">
-            <span class="data-tools-label">개인 데이터</span>
-            <span class="data-tools-btns">
-              <button type="button" class="btn btn-cancel pdata-export">내보내기</button>
-              <button type="button" class="btn btn-cancel pdata-import">가져오기</button>
-            </span>
+
+      <!-- 데이터 드롭다운(<details>): 클릭하면 내보내기/가져오기 펼침.
+           현재 화면 모드(data-view-mode)에 따라 개인/팀 데이터 도구가 CSS 로 토글된다(기존 동작 유지). -->
+      <details class="hdr-menu data-menu">
+        <summary class="hdr-menu-btn">데이터<span class="hdr-caret" aria-hidden="true">▾</span></summary>
+        <div class="hdr-menu-panel hdr-menu-list">
+          <!-- 현재 화면 모드(data-view-mode)에 따라 개인/팀 중 하나만 표시(CSS 토글) — 기존 동작 유지 -->
+          <div class="personal-data-tools">
+            <button type="button" class="hdr-menu-item pdata-export" data-close-menu>내보내기</button>
+            <button type="button" class="hdr-menu-item pdata-import" data-close-menu>가져오기</button>
             <input type="file" class="pdata-file" accept="application/json,.json" hidden aria-hidden="true" />
           </div>
-          <div class="data-tools team-data-tools">
-            <span class="data-tools-label">팀 데이터</span>
-            <span class="data-tools-btns">
-              <button type="button" class="btn btn-cancel tdata-export">내보내기</button>
-              <button type="button" class="btn btn-cancel tdata-import">가져오기</button>
-            </span>
+          <div class="team-data-tools">
+            <button type="button" class="hdr-menu-item tdata-export" data-close-menu>내보내기</button>
+            <button type="button" class="hdr-menu-item tdata-import" data-close-menu>가져오기</button>
             <input type="file" class="tdata-file" accept="application/json,.json" hidden aria-hidden="true" />
           </div>
         </div>
-        <div class="auth-user">
-          <span class="auth-name" id="auth-name"></span>
-          <span class="auth-uid-row">
-            UID: <code class="auth-uid" id="auth-uid"></code>
-            <button type="button" class="btn btn-cancel auth-copy-btn" id="copy-uid-btn" title="UID 복사">복사</button>
-          </span>
+      </details>
+
+      <!-- 계정 드롭다운(<details>, 맨 오른쪽): 이름을 누르면 UID(복사 아이콘)·로그아웃 펼침 -->
+      <details class="hdr-menu account-menu">
+        <summary class="hdr-menu-btn account-summary">
+          <span class="auth-name" id="auth-name"></span><span class="hdr-caret" aria-hidden="true">▾</span>
+        </summary>
+        <div class="hdr-menu-panel hdr-menu-list account-panel">
+          <!-- UID 값은 화면에 노출하지 않고 보관만(복사용). auth.js 가 채운다. -->
+          <span id="auth-uid" hidden></span>
+          <button type="button" class="hdr-menu-item auth-copy-btn" id="copy-uid-btn" title="본인 UID 복사">UID 복사</button>
+          <button type="button" class="hdr-menu-item account-switch" id="switch-account-btn" title="다른 구글 계정으로 전환" data-close-menu>계정 변경</button>
+          <button type="button" class="hdr-menu-item account-logout" id="logout-btn" data-close-menu>로그아웃</button>
         </div>
-        <button type="button" class="btn btn-cancel" id="logout-btn">로그아웃</button>
-      </div>
+      </details>
     </div>
   </header>
 
@@ -74,16 +78,13 @@
     <section class="panel pproj-panel" aria-label="개인 프로젝트">
       <h2 class="panel-title">개인 프로젝트</h2>
 
-      <!-- 카테고리 필터 (전체/연구/강의/공부/일상) -->
+      <!-- 카테고리 필터 (전체/일상 + 추가 카테고리) — 추가 탭은 personalProjects.js 가 동적으로 붙인다 -->
       <nav class="pproj-filter" aria-label="카테고리 필터">
         <button type="button" class="tab is-active" data-pcat="all">전체</button>
-        <button type="button" class="tab" data-pcat="research">연구</button>
-        <button type="button" class="tab" data-pcat="lecture">강의</button>
-        <button type="button" class="tab" data-pcat="study">공부</button>
         <button type="button" class="tab" data-pcat="daily">일상</button>
       </nav>
 
-      <!-- 프로젝트 생성: 이름 + 카테고리 -->
+      <!-- 프로젝트 생성: 이름 + 카테고리 (추가 카테고리는 personalProjects.js 가 옵션으로 붙인다) -->
       <form class="pproj-form" autocomplete="off">
         <input
           type="text"
@@ -92,9 +93,6 @@
           aria-label="프로젝트 이름"
         />
         <select class="input pproj-cat-select" aria-label="카테고리 선택">
-          <option value="research">연구</option>
-          <option value="lecture">강의</option>
-          <option value="study">공부</option>
           <option value="daily">일상</option>
         </select>
         <button type="submit" class="btn btn-add">추가</button>
@@ -176,7 +174,6 @@
       <div class="team-select-bar">
         <label class="field-label" for="team-select">팀 선택</label>
         <select class="input team-select" id="team-select" aria-label="볼 팀 선택"></select>
-        <span class="team-select-hint">팀원과 실시간 공유</span>
       </div>
 
       <!-- 9단계) 팀 가입 신청 — 로그인 사용자가 아직 속하지 않은 팀에 직접 가입을 신청한다.
@@ -283,10 +280,75 @@
       </section>
     </div>
   </div>
-  <!-- 팀 관리 화면: 운영·관리 기능(새 팀 만들기·팀원 관리·가입 신청 처리)을 모은다.
-       슈퍼관리자/팀관리자에게만 탭이 보이며, teamManage.js 가 권한·팀선택·새 팀 만들기를 제어한다.
+  <!-- 관리 화면: 좌우 2단 구조.
+       왼쪽 '프로젝트 관리'(골격)는 로그인한 모든 사용자에게 보이고,
+       오른쪽 '팀 관리'(운영·관리 기능)는 슈퍼관리자/팀관리자에게만 보인다.
+       탭 자체는 로그인 사용자 전원에게 보이며, teamManage.js 가 탭·오른쪽 열의 표시를 제어한다.
        teamAdmin.js 는 DOM 조회를 .team-manage-screen 루트로 한정한다. -->
   <div class="team-manage-screen">
+   <div class="manage-layout">
+    <!-- 왼쪽: 프로젝트 관리 — 팀 공용 카테고리(팀 관리자 전용) + 개인용 카테고리(본인 전용, 모든 사용자).
+         열은 모두에게 보이나, 팀 카테고리 UI 는 관리자에게만(teamCategories.js),
+         개인 카테고리 UI 는 로그인 사용자에게만(personalCategories.js) 노출된다. -->
+    <section class="panel manage-projects-col" aria-label="프로젝트 관리">
+      <h2 class="panel-title">프로젝트 관리</h2>
+
+      <!-- 팀 공용 카테고리 관리 — teamCategories.js 가 관리자에게만 표시. 대상 팀은
+           오른쪽 '팀 관리'에서 선택된 팀과 연동된다("team-manage-team-selected" 이벤트). -->
+      <div class="mcat-team is-hidden">
+        <h3 class="mcat-subtitle">팀 공용 카테고리</h3>
+        <p class="mcat-team-target">
+          대상 팀: <strong class="mcat-team-name">—</strong>
+        </p>
+
+        <form class="mcat-form" autocomplete="off">
+          <input
+            type="text"
+            class="input mcat-name-input"
+            placeholder="추가할 카테고리 이름"
+            aria-label="추가할 카테고리 이름"
+            maxlength="20"
+          />
+          <button type="submit" class="btn btn-add mcat-add-btn">카테고리 추가</button>
+        </form>
+        <p class="mcat-hint">
+          기본 카테고리(연구·업무) 외에 <strong>팀당 최대 2개</strong>까지 추가할 수 있습니다.
+        </p>
+        <p class="mcat-msg" role="status" aria-live="polite"></p>
+
+        <!-- 현재 추가된 카테고리 목록(표시만 — 이번 단계에선 삭제·이름변경 없음) -->
+        <ul class="mcat-list"></ul>
+      </div>
+
+      <!-- 개인용 카테고리 관리 — 모든 로그인 사용자가 자기 것(본인 전용) 관리. personalCategories.js.
+           스타일은 팀 카테고리(.mcat-*)와 공유하고, JS 후크만 .pcatm-* 로 구분한다. -->
+      <div class="pcatm is-hidden">
+        <h3 class="mcat-subtitle">개인용 카테고리</h3>
+
+        <form class="mcat-form pcatm-form" autocomplete="off">
+          <input
+            type="text"
+            class="input mcat-name-input pcatm-name-input"
+            placeholder="추가할 카테고리 이름"
+            aria-label="추가할 개인 카테고리 이름"
+            maxlength="20"
+          />
+          <button type="submit" class="btn btn-add pcatm-add-btn">카테고리 추가</button>
+        </form>
+        <p class="mcat-hint pcatm-hint">
+          기본 카테고리(일상) 외에 <strong>최대 3개</strong>까지 추가할 수 있습니다.
+        </p>
+        <p class="mcat-msg pcatm-msg" role="status" aria-live="polite"></p>
+
+        <!-- 현재 본인의 추가 카테고리 목록(표시만 — 이번 단계에선 삭제·이름변경 없음) -->
+        <ul class="mcat-list pcatm-list"></ul>
+      </div>
+    </section>
+
+    <!-- 오른쪽: 팀 관리 — 슈퍼관리자/팀관리자에게만 표시(teamManage.js 가 is-hidden 토글).
+         기존 '팀 관리' 탭의 기능들을 위치만 이 열로 옮긴 것(동작·데이터 변경 없음). -->
+    <div class="manage-team-col is-hidden">
+      <h2 class="manage-col-title">팀 관리</h2>
     <!-- 관리할 팀 선택 (슈퍼관리자: 모든 팀 / 팀관리자: 내가 admin 인 팀) -->
     <div class="manage-select-bar">
       <label class="field-label" for="manage-team-select">관리할 팀</label>
@@ -424,10 +486,38 @@
       </div>
       <p class="team-danger-msg" role="status" aria-live="polite"></p>
     </section>
+    </div><!-- /.manage-team-col -->
+   </div><!-- /.manage-layout -->
   </div>
 
   </div><!-- /.app-shell -->
 
+  <!-- 헤더 드롭다운(데이터/계정) 공통 표시 동작 — 항목 클릭 후 닫힘, 바깥 클릭 시 닫힘,
+       한 번에 하나만 펼침. 표시 전용이며 기존 기능 로직(내보내기/가져오기/로그아웃/복사)과 무관. -->
+  <script>
+    (function () {
+      var menus = Array.prototype.slice.call(document.querySelectorAll(".hdr-menu"));
+      document.addEventListener("click", function (e) {
+        // 메뉴 항목(내보내기/가져오기/로그아웃) 클릭 시 해당 드롭다운 닫기 (복사 아이콘은 제외)
+        var item = e.target.closest("[data-close-menu]");
+        if (item) {
+          var d = item.closest(".hdr-menu");
+          if (d) d.removeAttribute("open");
+          return;
+        }
+        // 드롭다운 바깥 클릭 시 열린 메뉴 모두 닫기
+        if (!e.target.closest(".hdr-menu")) {
+          menus.forEach(function (m) { m.removeAttribute("open"); });
+        }
+      });
+      // 하나를 열면 나머지는 닫기(한 번에 하나만)
+      menus.forEach(function (d) {
+        d.addEventListener("toggle", function () {
+          if (d.open) menus.forEach(function (o) { if (o !== d) o.removeAttribute("open"); });
+        });
+      });
+    })();
+  </script>
   <script type="module" src="auth.js"></script>
   <script type="module" src="personalProjects.js"></script>
   <script type="module" src="personalTasks.js"></script>
@@ -435,6 +525,8 @@
   <script type="module" src="teamTasks.js"></script>
   <script type="module" src="teamAdmin.js"></script>
   <script type="module" src="teamManage.js"></script>
+  <script type="module" src="teamCategories.js"></script>
+  <script type="module" src="personalCategories.js"></script>
   <script type="module" src="teamJoin.js"></script>
   <script type="module" src="dataTransfer.js"></script>
   <script type="module" src="exportView.js"></script>
