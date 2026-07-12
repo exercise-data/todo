@@ -39,7 +39,8 @@ body {
   color: var(--text);
   line-height: 1.5;
   /* 화면 전체를 헤더 + 본문으로 분할하고, 본문(.layout) 안에서만 스크롤 */
-  height: 100vh;
+  /* dvh = 모바일 브라우저 툴바를 뺀 실제 보이는 높이. 태블릿 상단 헤더/하단 항목 잘림 방지. */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -335,6 +336,7 @@ body[data-auth="in"] .auth-screen {
 .panel-title {
   margin: 0 0 14px;
   font-size: 1.05rem;
+  font-weight: 700; /* A4-1: 파트 제목 굵기 명시(리셋 시 얇아짐 방지). manage-col-title 과 통일 */
   flex-shrink: 0; /* 스크롤 영역 위에 고정 */
 }
 
@@ -452,7 +454,7 @@ body[data-auth="in"] .auth-screen {
 /* 프로젝트 수정/삭제 버튼 */
 .project-actions {
   display: flex;
-  gap: 4px;
+  gap: 16px; /* A4-3: ✎🗑 간격 4→16px — 40px 터치영역이 겹치지 않게 분리 + 삭제 오터치 방지 */
 }
 
 .icon-btn {
@@ -472,6 +474,28 @@ body[data-auth="in"] .auth-screen {
 
 .icon-btn-danger:hover {
   background: #fde8e8;
+}
+
+/* A4-3(갈래 ㄷ): 2단 카드 안 수정/삭제 아이콘 버튼 — 겉보기 아이콘(font-size 0.9rem)은
+   그대로 작게 두고, 흐름에서 빠지는 절대배치 오버레이(::before)로 실제 클릭·터치 영역만
+   40×40px 로 넓힌다. 오버레이는 배경이 없어 눈에 안 보이고 카드 행 높이도 커지지 않는다.
+   (아이콘 문자·색·기능은 불변 — 터치 영역만 확대. ✎🗑 사이 간격은 아래 컨테이너 gap 으로 분리) */
+.project-actions .icon-btn,
+.task-actions .icon-btn,
+.pproj-actions .icon-btn {
+  position: relative;
+}
+.project-actions .icon-btn::before,
+.task-actions .icon-btn::before,
+.pproj-actions .icon-btn::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  /* 배경 없음: 눈에는 안 보이고 클릭만 받는 터치 영역 */
 }
 
 /* 인라인 수정 폼 */
@@ -494,6 +518,20 @@ body[data-auth="in"] .auth-screen {
 }
 .btn-cancel:hover {
   background: #dfe2e8;
+}
+
+/* A4-2 마무리: 입력/셀렉트와 한 행에 나란히 놓인 filled 버튼은 색이 꽉 차 있어
+   같은 높이(8px)라도 착시로 더 커 보인다. 해당 버튼만 세로 padding 을 8→6px 로
+   줄여 옆 입력(.input 8px) 대비 시각적 높이를 맞춘다. 가로 padding·배경색·글자·font-size 는 그대로.
+   (이 폴더엔 드롭다운 .pproj-select 가 없어 드롭다운 옆 버튼 규칙은 제외 — 모두 '입력/셀렉트 옆' 버튼) */
+.pproj-form .btn-add,        /* 개인·팀 프로젝트 생성 '추가'(이름/카테고리 select 옆) */
+.team-join-apply,            /* 팀 가입 '신청'(팀 select 옆) */
+.manage-rename-btn,          /* 팀명 '이름 변경'(팀명 입력 옆) */
+.create-team-form .btn-add,  /* 새 팀 '만들기'(팀명 입력 옆) */
+.team-admin-form .btn-add,   /* 팀원 '추가'(UID 입력·역할 select 옆) */
+.mcat-form .btn-add {        /* 카테고리 '추가'(팀·개인 공통 .mcat-form, 이름 입력 옆) */
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .badge {
@@ -601,7 +639,7 @@ body[data-auth="in"] .auth-screen {
 /* 할 일 수정/삭제 버튼 */
 .task-actions {
   display: flex;
-  gap: 4px;
+  gap: 16px; /* A4-3: ✎🗑 간격 4→16px — 40px 터치영역이 겹치지 않게 분리 + 삭제 오터치 방지 */
   margin-left: auto;
 }
 
@@ -741,7 +779,7 @@ body[data-auth="in"] .auth-screen {
 
 /* ===== 간트차트 ===== */
 .gantt {
-  overflow-x: hidden; /* 가변폭 칸으로 항상 한 화면에 맞춤 */
+  overflow-x: auto; /* 고정폭 칸: 넘치면 날짜 영역만 가로 스크롤 (R-d) */
   overflow-y: auto; /* 행이 많으면 이 영역만 세로 스크롤 */
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -750,9 +788,12 @@ body[data-auth="in"] .auth-screen {
   min-height: 0;
 }
 
+/* 일자 칸 폭(--gantt-day-w)은 그리드가 아니라 스크롤 컨테이너(.ptask-gantt)에 선언한다 (R-e).
+   그리드에 두면 '자기 선언'이 상속을 이겨서, 컨테이너에 인라인으로 배율을 꽂아도 안 먹는다.
+   컨테이너는 renderGantt 의 innerHTML="" 에도 살아남으므로 재렌더·드래그 중에도 배율이 유지된다. */
 .gantt-grid {
   display: grid;
-  width: 100%;
+  width: max-content; /* 고정폭 칸 합만큼 커져 넘치면 컨테이너가 가로 스크롤 */
 }
 
 /* 모든 칸 공통: 가로 격자선 (세로선은 두지 않아 막대가 끊겨 보이지 않음) */
@@ -764,7 +805,9 @@ body[data-auth="in"] .auth-screen {
   border-bottom: 1px solid var(--border);
 }
 
-/* 좌측 고정 라벨 열 */
+/* 좌측 고정 라벨 열 (가로 스크롤에도 남는다).
+   쌓임 층위 (②): 모서리 4 > 날짜 헤더 3 > 라벨 열 1 > 셀·막대.
+   막대 핸들이 z-index:2 라서 헤더는 반드시 그보다 위(3)여야 한다 — 아래 .gantt-bar 주석 참고. */
 .gantt-corner,
 .gantt-rowlabel {
   position: sticky;
@@ -784,6 +827,13 @@ body[data-auth="in"] .auth-screen {
   font-weight: 600;
   color: var(--text-muted);
   background: #fafbfc;
+  border-top: 1px solid var(--border); /* 헤더 최상단 가로선 (A단계) */
+  /* ② 왼쪽 위 모서리 = 가로(left:0, 위 규칙) + 세로(top:0) 2방향 고정.
+     sticky 는 축별로 독립 동작하므로 한 요소에 둘 다 걸 수 있다.
+     grid-row: span 2 (JS)로 헤더 두 줄을 통째로 덮고 있어 일자 줄 같은 top 오프셋 계산이 필요 없다.
+     z-index 4 = 헤더(3)·라벨 열(1)보다 위 → 어느 방향으로 스크롤해도 이 칸이 가장 위에 남는다. */
+  top: 0;
+  z-index: 4;
 }
 
 /* 라벨 열 너비 조절 핸들 (모서리 셀 우측 경계에 위치) */
@@ -800,6 +850,19 @@ body[data-auth="in"] .auth-screen {
 .gantt-resizer:active {
   background: rgba(59, 110, 240, 0.3);
 }
+/* 터치로 잡기 (③): 보이는 띠는 7px 그대로 두고, 투명 오버레이로 '잡히는 영역'만 좌우로 넓힌다
+   (아이콘 버튼의 ::before 40×40 확대와 같은 방식 — 겉보기·위치·기능은 불변).
+   ⚠ 세로로는 넓히지 않는다: 모서리 칸 아래로 넘치면 첫 행 작업명 라벨을 덮어 목록명 클릭(수정)이 막힌다.
+   ⚠ touch-action 은 주지 않는다: 주면 롱프레스 대기 중 스와이프가 스크롤로 넘어가지 못한다
+     (성사 후의 스크롤 억제는 JS 의 non-passive touchmove 로 처리 — 막대 드래그와 같은 규칙). */
+.gantt-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  right: -12px;
+}
 
 /* 날짜 헤더 */
 .gantt-day-head {
@@ -809,17 +872,47 @@ body[data-auth="in"] .auth-screen {
   padding: 6px 0;
   background: #fafbfc;
   white-space: nowrap;
-  overflow: visible; /* 좁은 칸에서도 라벨이 잘리지 않게 (라벨은 띄엄띄엄) */
+  overflow: visible; /* 좁은 칸에서도 숫자가 잘리지 않게 */
+  /* ② 세로 스크롤 시 상단 고정. top 은 0 이 아니라 '연월 밴드 높이' — 0 을 주면 윗줄과 포개진다.
+     기준 스크롤 컨테이너는 .ptask-gantt (overflow-y:auto). 배경이 불투명(#fafbfc)이라
+     막대가 헤더 밑을 지나가도 비치지 않는다. */
+  position: sticky;
+  top: var(--gantt-monthhead-h);
+  z-index: 3;
 }
-/* 날짜+요일 두 줄 라벨 — 세로로 쌓아 좁은 칸에서도 가로 폭을 덜 쓰게 */
-.gantt-day-head .gantt-head-date,
-.gantt-day-head .gantt-head-dow {
-  display: block;
-  line-height: 1.15;
+/* 세로 실선(각 일자 칸 경계): border 대신 배경 그라디언트(오른쪽 1px)라 막대(.gantt-bar)가
+   위를 덮어 끊기지 않음. 주말/공휴일 음영과는 다른 배경 레이어라 공존. 헤더·본문 동일. */
+.gantt-day-head,
+.gantt-cell {
+  background-image: var(--gantt-vline);
 }
-.gantt-day-head .gantt-head-dow {
-  font-size: 0.9em; /* 요일은 살짝 작게 */
-  opacity: 0.85;
+/* 윗줄 연월 밴드 (2단 헤더) — 같은 월의 일자 칸들 위에 걸쳐 표시 */
+.gantt-month-head {
+  box-sizing: border-box;
+  /* ② 세로 스크롤 시 맨 위 고정. 높이를 --gantt-monthhead-h 로 못박아, 아래 일자 줄의
+     sticky top 오프셋과 항상 같은 값이 되게 한다(따로 두면 겹침/틈이 생긴다). */
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: var(--gantt-monthhead-h);
+  border-top: 1px solid var(--border); /* 헤더 최상단 가로선 (A단계) */
+  border-bottom: 1px solid var(--border);
+  padding: 4px 4px 3px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* 월 경계 구분선: 예전엔 border-left(밴드 '왼쪽' 안쪽 1px)였는데, 아래 일자 칸의 세로선은
+     배경 그라디언트로 칸 '오른쪽' 안쪽 1px 에 그려진다. 같은 경계를 서로 반대편에서 그리니
+     정확히 1px 어긋났다. → 일자 칸과 똑같은 방식(--gantt-vline, 오른쪽 안쪽 1px)으로 통일한다.
+     밴드 폭 = 그 달의 일자 칸 폭 합이라, 밴드의 오른쪽 끝 = 그 달 마지막 일자 칸의 오른쪽 끝
+     → 두 선이 같은 x 에 놓인다. 확대/축소로 --gantt-day-w 가 바뀌어도 둘 다 '자기 박스의
+     오른쪽 끝' 기준이라 정렬이 유지된다. */
+  background-color: #fafbfc;
+  background-image: var(--gantt-vline);
 }
 
 /* 본문 칸 — 라벨이 여러 줄이면 행 높이가 늘어나도록 최소 높이만 지정 */
@@ -834,38 +927,52 @@ body[data-auth="in"] .auth-screen {
   color: var(--primary);
 }
 
-/* 주말/공휴일 음영 (막대 뒤 배경) */
-.gantt-day-head.is-sat,
+/* 주말/공휴일 음영 (막대 뒤 배경) — 본문 칸: 그대로 background-color 로 깔면 된다.
+   본문 칸은 position 이 없어(static) sticky 헤더(z-index:3)보다 항상 아래에 그려진다. */
 .gantt-cell.is-sat {
-  background: rgba(59, 110, 240, 0.06);
+  background-color: rgba(59, 110, 240, 0.06); /* 세로선(background-image)과 공존하도록 color만 */
 }
-.gantt-day-head.is-sun,
 .gantt-cell.is-sun,
-.gantt-day-head.is-holiday,
 .gantt-cell.is-holiday {
-  background: rgba(229, 83, 75, 0.09);
+  background-color: rgba(229, 83, 75, 0.09);
 }
+
+/* ⚠️ 헤더 칸은 다르게 처리한다 (② 마무리).
+   sticky 헤더는 '불투명'해야 한다. 그런데 주말/공휴일/오늘 색을 background-color 로 주면
+   그 반투명 rgba 가 헤더의 불투명 배경(#fafbfc)을 '대체'해 버려, 헤더가 반투명해지고
+   아래로 스크롤된 본문(주말 색줄·막대)이 헤더를 뚫고 비친다.
+   → 색은 background-color 로 덮지 말고, 세로 실선과 함께 background-image '레이어'로 얹는다.
+     background-color 는 #fafbfc 불투명 그대로 유지된다. (z-index 문제가 아니라 투명도 문제) */
 .gantt-day-head.is-sat {
   color: var(--primary);
+  background-image: var(--gantt-vline),
+    linear-gradient(rgba(59, 110, 240, 0.06), rgba(59, 110, 240, 0.06));
 }
 .gantt-day-head.is-sun,
 .gantt-day-head.is-holiday {
   color: var(--danger);
+  background-image: var(--gantt-vline),
+    linear-gradient(rgba(229, 83, 75, 0.09), rgba(229, 83, 75, 0.09));
 }
 
-/* 오늘은 주말/공휴일보다 우선 (소스 순서상 뒤에 위치) */
+/* 오늘은 주말/공휴일보다 우선 (소스 순서상 뒤에 위치 — 같은 명시도라 뒤가 이긴다) */
 .gantt-day-head.is-today {
   color: var(--primary);
   font-weight: 700;
-  background: rgba(59, 110, 240, 0.16);
+  background-image: var(--gantt-vline),
+    linear-gradient(rgba(59, 110, 240, 0.16), rgba(59, 110, 240, 0.16));
 }
 .gantt-cell.is-today {
-  background: rgba(59, 110, 240, 0.1);
+  background-color: rgba(59, 110, 240, 0.1);
 }
 
 /* 막대 (기간) — 칸 안에 떠 있는 내부 요소, 세로 가운데 정렬 */
 .gantt-bar {
   position: relative;
+  /* z-index 를 명시해 막대를 '쌓임 맥락'으로 만든다 (②).
+     이게 없으면 자식 .gantt-bar-handle 의 z-index:2 가 막대 밖으로 새어나가,
+     sticky 헤더(3)·라벨 열(1) 위로 손잡이가 그려진다. 0 이라 칸 배경 위·헤더 아래에 놓인다. */
+  z-index: 0;
   height: 14px;
   margin-top: 9px;
   cursor: pointer;
@@ -873,13 +980,32 @@ body[data-auth="in"] .auth-screen {
 /* 드래그로 기간 변경이 가능한 막대: 가운데는 이동(grab) */
 .gantt-bar.is-draggable {
   cursor: grab;
+  /* 터치에서는 '길게 누르기'가 성사된 뒤에만 드래그다. 그래서 여기에 touch-action:none을
+     주지 않는다 — 주면 대기 중 스와이프가 브라우저 스크롤로 넘어가지 못한다.
+     (touch-action은 제스처 시작 시점에 확정되어 도중에 바꿀 수 없으므로, 성사 후의 스크롤
+     억제는 JS에서 non-passive touchmove + preventDefault 로 처리한다.
+     personalTasks.js / teamTasks.js 의 startGanttDrag 참고) */
+}
+/* 길게 누르는 동안 OS의 텍스트 선택·컨텍스트 메뉴가 뜨지 않도록 */
+.gantt-bar {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* 롱프레스 성사(=이제 드래그 됨) 피드백. 막대는 칸마다 조각이라 테두리 대신 밝기·그림자로
+   강조해야 조각 경계가 드러나지 않는다. */
+.gantt-bar.is-dragging {
+  filter: brightness(1.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 /* 양 끝 드래그 핸들: 좌=시작일, 우=종료일 변경 (좌우 크기 조절 커서) */
 .gantt-bar-handle {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 9px;
+  /* 축소(R-e)해도 1일짜리 막대에 '가운데 잡고 이동'할 자리가 남도록 칸 폭에 연동.
+     9px 고정이면 좌우 합 18px 이라 16px 칸에서 막대를 다 덮어 이동이 불가능해진다. */
+  width: min(9px, calc(var(--gantt-day-w) / 3));
   cursor: ew-resize;
   z-index: 2;
 }
@@ -956,13 +1082,16 @@ body[data-auth="in"] .auth-screen {
   color: var(--text-muted);
 }
 
-/* 간트 단위 선택기 */
+/* 간트 도구막대의 내용(기간 설정·확대/축소·안내).
+   스크롤 박스(.ptask-gantt) 밖의 .ptask-gantt-toolbar 안에 들어가므로 자체 패딩은 두지 않는다
+   — 여백은 .list-toolbar(margin-bottom)가 맡는다. 기간 편집 폼이 열리면 다음 줄로 흘러야 해서
+   width:100% + flex-wrap. */
 .gantt-controls {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 10px 10px 0;
+  width: 100%;
 }
 
 .gantt-control-label {
@@ -980,6 +1109,44 @@ body[data-auth="in"] .auth-screen {
 
 .gantt-hint {
   margin: 0;
+}
+
+/* 확대/축소 (R-e) — 일자 칸 폭만 조절. 터치로 누르기 쉽도록 32×32 정사각. */
+.gantt-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gantt-zoom-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.gantt-zoom-btn:hover:not(:disabled) {
+  background: #eceef2;
+}
+.gantt-zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 배율 표시 — 자릿수가 바뀌어도 버튼이 흔들리지 않게 폭·숫자폭 고정 */
+.gantt-zoom-level {
+  min-width: 42px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 기간 설정 버튼 / 표시 / 편집 폼 */
@@ -1030,7 +1197,7 @@ body[data-auth="in"] .auth-screen {
 }
 
 .gantt-range-editor .btn {
-  padding: 5px 14px;
+  padding: 2.5px 14px; /* 적용/닫기(filled): 옆 날짜 박스(.input 4px) 대비 살짝 키움. 색·가로 유지 */
 }
 
 /* ===== 2·3단계: 화면 전환 (프로젝트 / 개인 할 일 / 팀 공용) ===== */
@@ -1091,18 +1258,19 @@ body[data-view-mode="manage"] .team-manage-screen {
   flex-shrink: 0;
 }
 
-/* 관리 화면 좌우 2단: 왼쪽 '프로젝트 관리' + 오른쪽 '팀 관리'.
-   flex-wrap 으로 좁은 화면에선 자동으로 세로로 줄바꿈된다.
-   오른쪽 열이 숨겨지면(is-hidden → display:none) 왼쪽이 전체 폭을 차지한다. */
+/* R10-c: 관리 화면을 전 폭 1단 세로 배치(PC 포함) — 개인/팀 화면과 같은 방향.
+   1행 프로젝트 관리 → 2행 팀 관리 → 3행 팀 삭제 순으로 쌓인다. 이 폴더엔 반응형이
+   없으므로 미디어쿼리 없이 기본을 1단으로 둔다. 각 행은 자연 높이(flex:0 0 auto).
+   오른쪽 '팀 관리' 열이 숨겨지면(is-hidden → display:none) 프로젝트 관리·팀 삭제만 남는다. */
 .manage-layout {
   display: flex;
+  flex-direction: column;
   gap: var(--gap);
-  flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: stretch;
 }
-/* 왼쪽: 프로젝트 관리(골격) — 컴팩트한 폭 */
+/* 1행: 프로젝트 관리 — 전 폭, 내용 높이만큼(납작) */
 .manage-projects-col {
-  flex: 1 1 300px;
+  flex: 0 0 auto;
   min-width: 0;
 }
 .manage-projects-placeholder {
@@ -1131,7 +1299,7 @@ body[data-view-mode="manage"] .team-manage-screen {
 .mcat-name-input {
   flex: 1 1 160px;
   min-width: 0;
-  padding: 6px 10px;
+  padding: 8px 10px; /* A4-2: 높이 8px 통일 */
 }
 .mcat-hint {
   margin: 8px 0 0;
@@ -1254,7 +1422,7 @@ body[data-view-mode="manage"] .team-manage-screen {
 }
 /* 오른쪽: 팀 관리 — 관리 기능 패널들을 세로로 쌓는다(남는 폭을 더 차지) */
 .manage-team-col {
-  flex: 2 1 520px;
+  flex: 0 0 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1282,7 +1450,7 @@ body[data-view-mode="manage"] .team-manage-screen {
 .admin-team-select {
   width: auto;
   min-width: 180px;
-  padding: 6px 10px;
+  padding: 8px 10px; /* A4-2: select 높이 8px 통일 */
 }
 .manage-select-hint {
   font-size: 0.8rem;
@@ -1307,7 +1475,7 @@ body[data-view-mode="manage"] .team-manage-screen {
 .manage-name-input {
   width: auto;
   min-width: 200px;
-  padding: 6px 10px;
+  padding: 8px 10px; /* A4-2: 높이 8px 통일 */
 }
 .manage-rename-note {
   font-size: 0.8rem;
@@ -1393,10 +1561,17 @@ body[data-view-mode="manage"] .team-manage-screen {
   border-radius: var(--radius);
   padding: 10px 14px;
 }
+/* '팀 선택' 라벨은 같은 급의 '팀 가입 신청'(.team-join-label 0.95rem/600)과 글자 크기를 맞춘다.
+   .field-label 공용 기본(0.75rem)은 그대로 두고, 이 바 안의 라벨만 스코프해서 조정(색 등 나머지는 유지). */
+.team-select-bar .field-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text); /* .field-label 기본 흐린 회색(--text-muted)을 덮어 '팀 가입 신청'(--text 상속)과 동일한 검정 계열로 */
+}
 .team-select {
   width: auto;
   min-width: 180px;
-  padding: 6px 10px;
+  padding: 8px 10px; /* A4-2: select 높이 8px 통일 */
 }
 
 /* 새 팀 만들기 (슈퍼관리자 전용) — '팀 관리' 탭에 패널 형태로 배치 */
@@ -1416,7 +1591,7 @@ body[data-view-mode="manage"] .team-manage-screen {
 .create-team-name {
   width: auto;
   min-width: 140px;
-  padding: 6px 10px;
+  padding: 8px 10px; /* A4-2: 높이 8px 통일 */
 }
 .create-team-msg {
   font-size: 0.8rem;
@@ -1465,7 +1640,7 @@ body[data-view-mode="manage"] .team-manage-screen {
 .team-join-pending-select {
   width: auto;
   min-width: 150px;
-  padding: 6px 10px;
+  padding: 8px 10px; /* A4-2: select 높이 8px 통일 */
 }
 .team-join-apply {
   flex: 0 0 auto;
@@ -2030,7 +2205,7 @@ body[data-view-mode="manage"] .data-menu {
 }
 .pproj-actions {
   display: flex;
-  gap: 4px;
+  gap: 16px; /* A4-3: ✎🗑 간격 4→16px — 40px 터치영역이 겹치지 않게 분리 + 삭제 오터치 방지 */
   flex-shrink: 0;
 }
 
@@ -2115,6 +2290,7 @@ body[data-view-mode="manage"] .data-menu {
 .pproj-detail:not(.has-project) .ptask-list,
 .pproj-detail:not(.has-project) .ptask-list-toolbar,
 .pproj-detail:not(.has-project) .ptask-gantt,
+.pproj-detail:not(.has-project) .ptask-gantt-toolbar,
 .pproj-detail:not(.has-project) .pproj-detail-actions {
   display: none;
 }
@@ -2160,9 +2336,21 @@ body[data-view-mode="manage"] .data-menu {
 
 /* ===== 개인 간트차트 컨테이너 (.gantt-* 그리드를 담음) ===== */
 .ptask-gantt {
+  --gantt-day-w: 24px; /* 일자 칸 기본 폭. 확대/축소(R-e)가 이 값만 인라인으로 덮어씀 (16~48px) */
+  /* 연월 밴드(2단 헤더 윗줄)의 높이 (②).
+     이 값 하나로 밴드의 실제 높이와 일자 줄의 sticky top 오프셋을 '같은 값'으로 못박는다
+     — 따로 두면 1px만 어긋나도 두 줄이 겹치거나 틈이 생긴다. */
+  --gantt-monthhead-h: 26px;
+  /* 일자 칸 오른쪽 세로 실선 (헤더·본문 공통). 변수로 둬야 주말/공휴일 음영을 '또 하나의
+     배경 레이어'로 얹을 때 실선을 잃지 않고 함께 쓸 수 있다. */
+  --gantt-vline: linear-gradient(
+    to right,
+    transparent calc(100% - 1px),
+    var(--border) calc(100% - 1px)
+  );
   flex: 1;
   min-height: 0;
-  overflow-x: hidden; /* 1fr 칸이라 가로 스크롤 없이 한 화면 */
+  overflow-x: auto; /* 고정폭 칸: 넘치면 날짜 영역만 가로 스크롤 (R-d) */
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2251,8 +2439,13 @@ body[data-view-mode="manage"] .data-menu {
   margin-top: 10px;
 }
 
-/* ===== 반응형: 모바일에서 위아래로 쌓기 ===== */
-@media (max-width: 760px) {
+/* ===== 반응형: 좁은 폭(≤979px)에서 2단→1단 세로 스택 + 페이지 스크롤 =====
+   갈래 D: 중단점을 760→979 로 올려, 태블릿 세로·폰(≤979)에서도 오른쪽 열이 삐져나가지
+   않게 2단(340px 1fr)을 1단(1fr)으로 접는다. 980px 이상은 미적용 → 넓은 2단 레이아웃 그대로.
+   ⚠️ 접힘(grid→1fr)과 페이지 스크롤 전환(body height:auto)은 반드시 같은 중단점에 둔다
+   (갈리면 761~979 구간이 100vh 안에 갇혀 하단 간트가 잘림).
+   카드는 숨기지 않고 그대로 세로로 쌓기만, 간트도 숨기지 않고 유지(가변폭으로 폭에 맞춤). */
+@media (max-width: 979px) {
   /* 패널을 세로로 쌓을 때는 화면 전체가 스크롤되도록 고정 높이 해제 */
   body {
     height: auto;
@@ -2272,11 +2465,9 @@ body[data-view-mode="manage"] .data-menu {
   .team-manage-screen {
     overflow: visible;
   }
-  /* 관리 화면 좌우 2단은 좁은 화면에서 세로로 쌓기(각 열이 전체 폭 차지) */
-  .manage-projects-col,
-  .manage-team-col {
-    flex: 1 1 100%;
-  }
+  /* 관리 화면은 R10-c에서 기본(전 폭 1단 column)으로 통일돼, 좁은 화면에서 열을
+     다시 지정할 필요가 없다. column 방향에선 flex-basis:100%가 세로축 기준이 되어
+     오히려 어색하므로 재지정하지 않는다. */
   .team-layout {
     min-height: 0;
   }
@@ -2297,5 +2488,31 @@ body[data-view-mode="manage"] .data-menu {
   .ptask-gantt {
     overflow-y: visible;
     flex: 0 1 auto;
+  }
+
+  /* ── 좁은 폭(폰): 간트 숨기고 목록만 ──
+     .ptask-gantt / .ptask-gantt-toolbar 는 개인·팀이 같은 클래스라 한 번에 양쪽이 처리된다.
+     데이터·구독·렌더 로직은 그대로 두고 '표시'만 끈다(대체 뷰는 만들지 않는다).
+     도구막대(기간 설정·확대/축소)도 같이 숨겨야 한다 — 안 그러면 차트 없이 버튼만 남는다. */
+  .ptask-gantt,
+  .ptask-gantt-toolbar {
+    display: none !important;
+  }
+
+  /* 간트가 없으니 목록/간트 전환 탭도 숨긴다. 탭이 없으면 '간트 뷰'로 넘어갈 수 없어
+     빈 화면이 되지 않는다. */
+  .ptask-viewtabs {
+    display: none !important;
+  }
+
+  /* 넓은 화면에서 '간트' 뷰를 켠 채 폭을 줄이면 setTaskView() 가 목록에 남겨둔 is-hidden
+     때문에 목록까지 사라진다 → 프로젝트가 선택된 상태에서는 목록(과 그 도구막대)을 항상 표시.
+     프로젝트 미선택 시(.has-project 없음)엔 기존 규칙대로 숨긴 채 둔다.
+     도구막대는 :not(:empty) 로 한정 — 비어 있을 때 12px 빈 줄이 생기지 않게 (.list-toolbar:empty). */
+  .pproj-detail.has-project .ptask-list {
+    display: flex !important;
+  }
+  .pproj-detail.has-project .ptask-list-toolbar:not(:empty) {
+    display: flex !important;
   }
 }

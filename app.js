@@ -273,10 +273,6 @@ const DEFAULT_LABEL_WIDTH = 150;
 const MIN_LABEL_WIDTH = 90;
 const MAX_LABEL_WIDTH = 480;
 
-// 현재 선택된 프로젝트의 축 단위 (없으면 "auto")
-function getGanttUnit() {
-  return ganttUnits[selectedProjectId] || "auto";
-}
 
 // 현재 선택된 프로젝트의 표시 기간 (없으면 null = 전체 보기)
 function getGanttRange() {
@@ -638,13 +634,6 @@ function addDays(ymd, n) {
 }
 
 // 전체 기간 길이에 따라 축 단위를 자동 선택
-function pickUnit(minStart, maxEnd) {
-  const span = dayDiff(minStart, maxEnd) + 1;
-  if (span <= 45) return "day";
-  if (span <= 365) return "week";
-  return "month";
-}
-
 // 매년 날짜가 고정인 한국 양력 공휴일 (MM-DD).
 const FIXED_HOLIDAYS = {
   "01-01": "신정",
@@ -730,16 +719,8 @@ function dayMarkClass(ymd) {
 }
 
 // 월요일 시작 주의 시작일
-function startOfWeek(date) {
-  const x = new Date(date);
-  const offset = (x.getDay() + 6) % 7; // 월=0 ... 일=6
-  x.setDate(x.getDate() - offset);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-// 축 기간 배열 생성: [{ start, end, label }]. 각 칸은 day/week/month 한 구간.
-function buildPeriods(minStart, maxEnd, unit) {
+// 축 기간 배열 생성: [{ start, end, label }] — '일' 단위 고정 (하루당 한 칸)
+function buildPeriods(minStart, maxEnd) {
   const periods = [];
   const last = new Date(`${maxEnd}T00:00:00`);
   let cur = new Date(`${minStart}T00:00:00`);
@@ -747,33 +728,11 @@ function buildPeriods(minStart, maxEnd, unit) {
 
   const dayLabel = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
 
-  if (unit === "day") {
-    while (cur <= last && guard < 2000) {
-      const s = toYMD(cur);
-      periods.push({ start: s, end: s, label: dayLabel(cur) });
-      cur.setDate(cur.getDate() + 1);
-      guard++;
-    }
-  } else if (unit === "week") {
-    cur = startOfWeek(cur);
-    while (cur <= last && guard < 1000) {
-      const start = new Date(cur);
-      const end = new Date(cur);
-      end.setDate(end.getDate() + 6);
-      periods.push({ start: toYMD(start), end: toYMD(end), label: dayLabel(start) });
-      cur.setDate(cur.getDate() + 7);
-      guard++;
-    }
-  } else {
-    cur = new Date(cur.getFullYear(), cur.getMonth(), 1);
-    while (cur <= last && guard < 600) {
-      const start = new Date(cur.getFullYear(), cur.getMonth(), 1);
-      const end = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
-      const label = `${cur.getFullYear()}.${String(cur.getMonth() + 1).padStart(2, "0")}`;
-      periods.push({ start: toYMD(start), end: toYMD(end), label });
-      cur.setMonth(cur.getMonth() + 1);
-      guard++;
-    }
+  while (cur <= last && guard < 2000) {
+    const s = toYMD(cur);
+    periods.push({ start: s, end: s, label: dayLabel(cur) });
+    cur.setDate(cur.getDate() + 1);
+    guard++;
   }
   return periods;
 }
@@ -798,29 +757,6 @@ function buildGanttControls(dataRange, activeRange) {
   const wrap = document.createElement("div");
   wrap.className = "gantt-controls";
 
-  const label = document.createElement("label");
-  label.className = "gantt-control-label";
-  label.textContent = "축 단위";
-
-  const select = document.createElement("select");
-  select.className = "input gantt-unit-select";
-  select.setAttribute("aria-label", "간트 축 단위 선택");
-  const options = [
-    ["auto", "자동"],
-    ["day", "일"],
-    ["week", "주"],
-    ["month", "월"],
-  ];
-  const current = getGanttUnit();
-  options.forEach(([value, text]) => {
-    const opt = document.createElement("option");
-    opt.value = value;
-    opt.textContent = text;
-    if (value === current) opt.selected = true;
-    select.append(opt);
-  });
-  label.append(select);
-
   // 기간 설정 토글 버튼
   const rangeBtn = document.createElement("button");
   rangeBtn.type = "button";
@@ -833,7 +769,7 @@ function buildGanttControls(dataRange, activeRange) {
   // 축 단위(자동/일/주/월)와 무관하게 동일한 안내 문구를 표시
   hint.textContent = "막대를 드래그해 기간 변경 · 클릭하면 수정";
 
-  wrap.append(label, rangeBtn, hint);
+  wrap.append(rangeBtn, hint);
 
   // 내보내기 버튼 (PNG / PDF)
   wrap.append(buildExportButtons("gantt"));
@@ -947,11 +883,9 @@ function renderGantt() {
   );
   const hiddenByRange = dated.length - visibleTasks.length;
 
-  // 축 단위: 이 프로젝트에 저장된 값. "auto"면 기간 길이로 자동 선택.
-  const selectedUnit = getGanttUnit();
-  const unit =
-    selectedUnit === "auto" ? pickUnit(minStart, maxEnd) : selectedUnit;
-  const periods = buildPeriods(minStart, maxEnd, unit);
+  // 축 단위는 '일'로 고정 (주/월 토글 제거, R-a)
+  const unit = "day";
+  const periods = buildPeriods(minStart, maxEnd);
   const today = toYMD(new Date());
   const todayIdx = findPeriodIndex(periods, today);
 
@@ -1124,15 +1058,6 @@ viewTabsEl.addEventListener("click", (e) => {
   const tab = e.target.closest(".view-tab");
   if (!tab) return;
   setTaskView(tab.dataset.view);
-});
-
-// 간트 축 단위 선택 변경
-ganttEl.addEventListener("change", (e) => {
-  const select = e.target.closest(".gantt-unit-select");
-  if (!select || !selectedProjectId) return;
-  ganttUnits[selectedProjectId] = select.value;
-  saveGanttUnits();
-  renderGantt();
 });
 
 // 간트 '기간 설정' 컨트롤 처리 (토글/적용/닫기/전체 보기) + 내보내기

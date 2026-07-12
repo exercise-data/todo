@@ -158,6 +158,11 @@
       <!-- 할일 목록: personalTasks.js의 renderPersonalTasks()가 채웁니다 -->
       <ul class="task-list ptask-list"></ul>
 
+      <!-- 간트 도구막대(기간 설정·확대/축소·안내): renderGantt()가 채웁니다.
+           간트 스크롤 박스 '밖'에 두어야 가로 스크롤에 딸려 사라지지 않습니다.
+           (목록 보기의 .ptask-list-toolbar 와 같은 구조) -->
+      <div class="list-toolbar ptask-gantt-toolbar is-hidden"></div>
+
       <!-- 간트차트: personalTasks.js의 renderGantt()가 채웁니다 -->
       <div class="ptask-gantt is-hidden" aria-label="간트차트"></div>
     </section>
@@ -276,6 +281,9 @@
         <div class="list-toolbar ptask-list-toolbar"></div>
 
         <ul class="task-list ptask-list"></ul>
+
+        <!-- 간트 도구막대: 스크롤 박스 밖(가로 스크롤에 딸려가지 않도록). teamTasks.js가 채웁니다 -->
+        <div class="list-toolbar ptask-gantt-toolbar is-hidden"></div>
         <div class="ptask-gantt is-hidden" aria-label="간트차트"></div>
       </section>
     </div>
@@ -290,9 +298,13 @@
     <!-- 왼쪽: 프로젝트 관리 — 팀 공용 카테고리(팀 관리자 전용) + 개인용 카테고리(본인 전용, 모든 사용자).
          열은 모두에게 보이나, 팀 카테고리 UI 는 관리자에게만(teamCategories.js),
          개인 카테고리 UI 는 로그인 사용자에게만(personalCategories.js) 노출된다. -->
-    <section class="panel manage-projects-col" aria-label="프로젝트 관리">
-      <h2 class="panel-title">프로젝트 관리</h2>
+    <!-- R10-c: '팀 관리'와 동일 패턴 — 바깥은 박스 없는 div(제목만 얹음), 카테고리 내용만
+         안쪽 <section class="panel"> 로 감싸 박스 유지. manage-projects-col 클래스명은
+         teamCategories/personalCategories.js 의 루트 조회용이라 반드시 유지한다. -->
+    <div class="manage-projects-col">
+      <h2 class="manage-col-title">프로젝트 관리</h2>
 
+      <section class="panel">
       <!-- 팀 공용 카테고리 관리 — teamCategories.js 가 관리자에게만 표시. 대상 팀은
            오른쪽 '팀 관리'에서 선택된 팀과 연동된다("team-manage-team-selected" 이벤트). -->
       <div class="mcat-team is-hidden">
@@ -343,7 +355,8 @@
         <!-- 현재 본인의 추가 카테고리 목록(표시만 — 이번 단계에선 삭제·이름변경 없음) -->
         <ul class="mcat-list pcatm-list"></ul>
       </div>
-    </section>
+      </section>
+    </div>
 
     <!-- 오른쪽: 팀 관리 — 슈퍼관리자/팀관리자에게만 표시(teamManage.js 가 is-hidden 토글).
          기존 '팀 관리' 탭의 기능들을 위치만 이 열로 옮긴 것(동작·데이터 변경 없음). -->
@@ -453,7 +466,12 @@
       </div>
     </section>
 
-    <!-- 팀 삭제(위험 구역) — 슈퍼관리자(특정 UID)에게만 보임. teamManage.js 가 is-hidden 토글.
+    </div><!-- /.manage-team-col -->
+
+    <!-- 3행: 팀 삭제(위험 구역) — R10-c 에서 .manage-team-col "밖"으로 빼내 .manage-layout 의
+         형제(맨 아래 행)로 배치. 여전히 .team-manage-screen 안에 있어 teamManage.js 의
+         루트 조회(.team-manage-screen)·is-hidden 토글은 그대로 동작한다.
+         슈퍼관리자(특정 UID)에게만 보임. teamManage.js 가 is-hidden 토글.
          가장 파괴적인 기능이라 2단계 확인을 거친다:
            1차) 경고 confirm() 대화상자
            2차) 팀 ID 직접 입력값이 실제 팀 ID와 정확히 일치
@@ -486,7 +504,6 @@
       </div>
       <p class="team-danger-msg" role="status" aria-live="polite"></p>
     </section>
-    </div><!-- /.manage-team-col -->
    </div><!-- /.manage-layout -->
   </div>
 
