@@ -41,7 +41,9 @@ function inlineStylesFromLive(liveRoot, cloneRoot) {
 
 // 보기 컨텐츠를 흰 카드로 감싼 내보내기용 DOM을 만든다.
 //   view: "list" | "gantt", listEl/ganttEl: 해당 패널의 라이브 컨테이너
-function buildExportCard(view, listEl, ganttEl, projectName, rangeLabel) {
+//   ganttToolbarEl: 간트의 고정 도구막대(스크롤 박스 '밖'). 주말/공휴일 범례가 여기 있어
+//     ganttEl 복제만으로는 내보내기에 안 실린다 → 아래에서 따로 복제해 카드에 붙인다.
+function buildExportCard(view, listEl, ganttEl, projectName, rangeLabel, ganttToolbarEl) {
   let liveContainer;
   if (view === "gantt") {
     if (!ganttEl.querySelector(".gantt-grid")) return null;
@@ -79,6 +81,28 @@ function buildExportCard(view, listEl, ganttEl, projectName, rangeLabel) {
     clone
       .querySelectorAll(".task-actions, .list-note")
       .forEach((el) => el.remove());
+  }
+
+  // 주말/공휴일 범례는 가로 스크롤에 밀리지 않도록 스크롤 박스 '밖'의 고정 도구막대로 옮겼다.
+  // 그래서 ganttEl 복제본에는 안 들어온다 → 도구막대에서 따로 복제해 차트 아래에 되붙인다.
+  // (도구막대의 나머지 컨트롤은 내보내기 대상이 아니므로 범례만 골라 온다.)
+  if (view === "gantt" && ganttToolbarEl) {
+    const liveLegend = ganttToolbarEl.querySelector(".gantt-legend");
+    if (liveLegend) {
+      const legendClone = liveLegend.cloneNode(true);
+      inlineStylesFromLive(liveLegend, legendClone);
+      // 도구막대에선 margin:0 (간격을 flex gap 이 맡음) → 카드에선 예전처럼 여백을 준다
+      legendClone.style.margin = "10px";
+      // ★ inlineStylesFromLive 는 '도구막대에서 실제로 잡힌 폭'까지 인라인으로 복사한다.
+      //   그 폭이 카드 안(SVG foreignObject 래스터화 — 글자 폭이 미세하게 달라진다)에서 1px만
+      //   모자라도 마지막 항목이 다음 줄로 밀린다. 폭은 내용에 맞게 다시 잡히도록 풀어 준다.
+      //   (스와치 .lg 의 14px 은 CSS 로 못박은 값이라 그대로 둔다.)
+      legendClone.style.width = "auto";
+      legendClone
+        .querySelectorAll(".lg-item")
+        .forEach((it) => (it.style.width = "auto"));
+      clone.append(legendClone);
+    }
   }
 
   // 복제본 루트의 스크롤/높이 제약 해제 → 전체 내용이 잘리지 않고 펼쳐짐
@@ -264,18 +288,22 @@ function readPanel(root) {
   const view = activeTab && activeTab.dataset.ptview === "gantt" ? "gantt" : "list";
   const listEl = root.querySelector(".ptask-list");
   const ganttEl = root.querySelector(".ptask-gantt");
+  const ganttToolbarEl = root.querySelector(".ptask-gantt-toolbar");
   const nameEl = root.querySelector(".pproj-detail-name");
   const projectName = (nameEl && nameEl.textContent.trim()) || "내보내기";
 
-  // 표시 기간: 보이는 보기의 기간 태그(.gantt-range-tag) 텍스트에서 추출, 없으면 "전체"
+  // 표시 기간: 보이는 보기의 기간 태그(.gantt-range-tag) 텍스트에서 추출, 없으면 "전체".
+  // ★ 간트의 기간 태그는 ganttEl(스크롤 박스) 이 아니라 그 위 고정 도구막대에 있다.
+  //   예전엔 ganttEl 에서 찾다가 늘 못 찾아, 기간을 설정해도 내보내기에는 "전체"로 찍혔다.
+  //   (목록은 예전 그대로 .ptask-list-toolbar 에서 찾는다.)
   const scopeEl =
-    view === "gantt" ? ganttEl : root.querySelector(".ptask-list-toolbar");
+    view === "gantt" ? ganttToolbarEl : root.querySelector(".ptask-list-toolbar");
   const tag = scopeEl ? scopeEl.querySelector(".gantt-range-tag") : null;
   const rangeLabel = tag
     ? tag.textContent.replace(/^표시 기간:\s*/, "").trim()
     : "전체";
 
-  return { view, listEl, ganttEl, projectName, rangeLabel };
+  return { view, listEl, ganttEl, ganttToolbarEl, projectName, rangeLabel };
 }
 
 // 메인 진입점: 패널의 현재 보기를 format("png"|"pdf")으로 저장
@@ -284,9 +312,17 @@ async function exportPanel(root, format) {
     alert("먼저 왼쪽에서 프로젝트를 선택하세요.");
     return;
   }
-  const { view, listEl, ganttEl, projectName, rangeLabel } = readPanel(root);
+  const { view, listEl, ganttEl, ganttToolbarEl, projectName, rangeLabel } =
+    readPanel(root);
 
-  const card = buildExportCard(view, listEl, ganttEl, projectName, rangeLabel);
+  const card = buildExportCard(
+    view,
+    listEl,
+    ganttEl,
+    projectName,
+    rangeLabel,
+    ganttToolbarEl
+  );
   if (!card) {
     alert("내보낼 내용이 없습니다.");
     return;

@@ -382,6 +382,27 @@ body[data-auth="in"] .auth-screen {
   background: var(--primary-hover);
 }
 
+/* 날짜 입력(.field = 라벨 + 입력칸 세로 2단) 옆에 놓이는 버튼의 정렬·크기 — 추가/수정 폼 공통.
+   ★ 컨테이너에 align-items:center 를 쓰지 않는다. 그러면 '라벨+입력 전체'(58.4px) 높이가 기준이
+     되어 버튼이 입력 박스보다 11px 위로 뜬다(= 라벨 밴드 22px 의 절반. 반복 재발한 함정).
+     컨테이너는 flex-end(바닥 맞춤)로 두고, 아래 margin 으로 높이차의 절반만큼만 끌어올려
+     '라벨을 제외한 입력 박스'의 세로 중앙에 맞춘다.
+   · 크기(착시 보정): 버튼 세로 padding 은 옆 날짜 입력(8px)보다 2px 작은 6px.
+     같은 값이면 버튼이 입력칸보다 커 보인다.
+   · margin-bottom 1.7px 의 근거 — 헤드리스 브라우저로 실측한 값이다. 계산으로 넘겨짚지 말 것:
+       날짜 입력 36.39px = line box 18.39(UA monospace) + padding 16 + border 2
+       버튼       33.00px = line box 21.00(UA Arial)     + padding 12 + border 0
+     둘의 폰트가 달라 line box 가 2.6px 차이 나므로, 테두리·패딩만으로 6px 차이라고 계산하면
+     틀린다(실제 차이는 3.39px). 바닥을 맞춘 상태에서 그 절반인 1.7px 을 띄우면 중앙이 맞는다.
+   · 라벨이 입력칸 '옆'에 오는 가로 배치(.gantt-range-editor)는 1단이라 center 가 맞다 —
+     이 규칙의 대상이 아니다. */
+.ptask-form .btn,
+.task-edit-form .btn {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 1.7px;
+}
+
 /* ===== 프로젝트 패널 ===== */
 .project-form {
   display: grid;
@@ -644,12 +665,15 @@ body[data-auth="in"] .auth-screen {
 }
 
 /* 할 일 인라인 수정 폼 */
+/* align-items 는 center 가 아니라 flex-end — 시작일/종료일이 '라벨 위 + 입력칸 아래' 2단이라
+   center 로 두면 저장/취소가 그 전체 높이의 중앙, 즉 입력칸보다 위로 떠 버린다.
+   버튼을 입력 박스 중앙에 맞추는 padding·margin 은 위 '.ptask-form .btn, .task-edit-form .btn' 참고. */
 .task-edit-form {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   width: 100%;
-  align-items: center;
+  align-items: flex-end;
 }
 .edit-task-title {
   flex: 1 1 100%;
@@ -1049,22 +1073,39 @@ body[data-auth="in"] .auth-screen {
   border-bottom-right-radius: 6px;
 }
 
-/* 주말/공휴일 범례 */
+/* 주말/공휴일 범례.
+   스크롤 박스(.ptask-gantt) 안이 아니라 그 위 고정 도구막대(.gantt-controls)의 항목이므로
+   자체 바깥여백을 두지 않는다 — 항목 간 간격은 .gantt-controls 의 gap(10px)이 맡는다.
+   (가로 스크롤에 밀려나지 않게 하려고 옮겼다. 내보내기 카드에서는 exportView.js 가
+    복제하면서 여백을 인라인으로 되돌려 준다.) */
 .gantt-legend {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  margin: 10px;
+  /* 도구막대에선 바깥여백 없음 — 항목 간 간격은 .gantt-controls 의 gap(10px).
+     단 바로 앞 안내문구와는 붙어 보이므로 왼쪽만 조금 더 띄운다(10px gap + 14px = 24px). */
+  margin: 0 0 0 14px;
   font-size: 0.78rem;
   color: var(--text-muted);
 }
+/* 범례 한 항목 = 스와치 + 라벨. 이 둘은 절대 갈라지지 않는다(nowrap).
+   줄바꿈은 항목과 항목 사이에서만(.gantt-legend 의 flex-wrap).
+   항목 안 간격(6px)과 항목 사이 간격(.gantt-legend 의 gap 6px)이 같아, 묶기 전과 보기가 같다. */
+.gantt-legend .lg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .gantt-legend .lg {
   display: inline-block;
   width: 14px;
   height: 14px;
   border-radius: 3px;
   vertical-align: middle;
+  flex-shrink: 0; /* 좁아져도 스와치가 찌그러지지 않게 */
 }
 .gantt-legend .lg-sat {
   background: rgba(59, 110, 240, 0.18);

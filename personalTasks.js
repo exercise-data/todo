@@ -627,8 +627,24 @@ function zoomGantt(delta) {
   box.querySelector(".gantt-zoom-in").disabled = ganttDayW >= DAY_W_MAX;
 }
 
+// 주말/공휴일 범례. 스크롤 박스(ganttEl) 안에 두면 가로 스크롤에 딸려 밀려나므로,
+// 기간 설정·확대/축소와 같은 고정 도구막대(ganttToolbarEl)에 넣는다.
+// (내보내기는 ganttEl 만 복제하므로, exportView.js 가 이 범례를 따로 복제해 카드에 넣는다.)
+function buildGanttLegend() {
+  const legend = document.createElement("div");
+  legend.className = "gantt-legend";
+  // 스와치와 라벨을 .lg-item 한 단위로 묶는다 — 묶지 않으면 스와치와 글자가 각각 별개의
+  // flex 항목이라 폭이 모자랄 때 둘이 다른 줄로 갈라진다(내보내기 카드에서 '오늘'이 그랬다).
+  // 줄바꿈은 항목과 항목 '사이'에서만 일어난다(.lg-item 은 white-space:nowrap).
+  legend.innerHTML =
+    '<span class="lg-item"><span class="lg lg-sat"></span>토</span>' +
+    '<span class="lg-item"><span class="lg lg-sun"></span>일·공휴일</span>' +
+    '<span class="lg-item"><span class="lg lg-today"></span>오늘</span>';
+  return legend;
+}
+
 // ----- 간트차트 렌더 (외부 라이브러리 없이 CSS/JS로) -----
-// 기간 설정 토글 + 확대/축소 + 안내. (축 단위는 '일'로 고정 — 단위 선택기 없음)
+// 기간 설정 토글 + 확대/축소 + 안내 + 범례. (축 단위는 '일'로 고정 — 단위 선택기 없음)
 function buildGanttControls() {
   const wrap = document.createElement("div");
   wrap.className = "gantt-controls";
@@ -644,7 +660,9 @@ function buildGanttControls() {
   hint.className = "gantt-note gantt-hint";
   hint.textContent = "막대를 길게 누르면 이동·편집 가능";
 
-  wrap.append(rangeBtn, buildGanttZoom(), hint);
+  // 순서: [기간 설정][− 100% +] → 안내문구 → (여백) 범례.
+  // 범례 앞 여백은 .gantt-legend 의 margin-left 가 준다(안내문구와 붙지 않게).
+  wrap.append(rangeBtn, buildGanttZoom(), hint, buildGanttLegend());
 
   // 적용 중인 표시 기간 + 전체 보기 리셋
   const activeRange = getGanttRange();
@@ -884,16 +902,8 @@ function renderGantt() {
 
   ganttEl.append(grid);
 
-  // 일 단위일 때 주말/공휴일 범례
-  if (unit === "day") {
-    const legend = document.createElement("div");
-    legend.className = "gantt-legend";
-    legend.innerHTML =
-      '<span class="lg lg-sat"></span>토 ' +
-      '<span class="lg lg-sun"></span>일·공휴일 ' +
-      '<span class="lg lg-today"></span>오늘';
-    ganttEl.append(legend);
-  }
+  // (주말/공휴일 범례는 여기서 그리지 않는다 — 가로 스크롤에 밀리지 않도록
+  //  buildGanttControls() 안에서 고정 도구막대에 붙인다.)
 
   if (hiddenByRange > 0) {
     ganttEl.append(

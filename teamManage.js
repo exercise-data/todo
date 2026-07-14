@@ -394,13 +394,20 @@ createTeamForm.addEventListener("submit", async (e) => {
   const teamId = createTeamIdInput.value.trim();
   const name = createTeamNameInput.value.trim();
 
-  // 입력 검증: 팀 ID 는 영문 소문자/숫자만, 공백·빈값·특수문자 차단
+  // 입력 검증: 팀 ID 는 영문 소문자/숫자/언더바(_)만, 공백·빈값·특수문자 차단.
+  // 언더바는 '사이'에만 — 앞뒤 언더바(_team, team_)와 연속 언더바(a__b)는 거부한다.
+  // (memberships/joinRequests 문서 id 를 "{uid}_{teamId}" 로 조합하는데, uid 는 언더바가
+  //  없는 영숫자라 teamId 안의 언더바가 id 조합을 모호하게 만들지 않는다.)
   if (!teamId) {
     showCreateTeamMsg("팀 ID 를 입력하세요.", true);
     return;
   }
-  if (!/^[a-z0-9]+$/.test(teamId)) {
-    showCreateTeamMsg("팀 ID 는 영문 소문자와 숫자만 사용할 수 있습니다.", true);
+  if (!/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(teamId)) {
+    showCreateTeamMsg(
+      "팀 ID 는 영문 소문자·숫자·언더바(_)만 사용할 수 있습니다. " +
+        "언더바는 문자 사이에만 쓸 수 있습니다(앞뒤·연속 언더바 불가).",
+      true
+    );
     return;
   }
   if (!name) {
