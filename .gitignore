@@ -9,6 +9,7 @@ drag-harness.html
 team-drag-harness.html
 data-harness.html
 _fakeFirebase.js
+_devtools/
 
 # OS / 편집기 부산물
 Thumbs.db

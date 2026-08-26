@@ -64,3 +64,5 @@
   `--disable-background-timer-throttling --disable-renderer-backgrounding
   --disable-backgrounding-occluded-windows`(안 주면 rAF 가 눌려 자동 스크롤 측정이 무의미).
 - 헤드리스에서 `alert`/`confirm` 을 그대로 두면 페이지가 멈춘다 — 하네스가 가로챈다.
+- 도구 사용법·검증 항목·함정은 `_devtools/README.md` 에 정리돼 있다(로컬에만 있음).
+  드라이버는 `node _devtools/cdp.mjs <url> <checks/*.js>`.
