@@ -2250,6 +2250,118 @@ body[data-view-mode="manage"] .data-menu {
   flex-shrink: 0;
 }
 
+/* ===== 완료 영역 구분 (프로젝트 목록 하단) =====
+   별도 보관함·화면을 만들지 않고, 한 목록 안에서 구분선 아래를 '완료' 영역으로 쓴다.
+   완료 여부는 문서의 done 필드이고, 사용자는 카드를 이 선 위/아래로 끌어 옮겨 바꾼다.
+   ⚠ 완료 영역이 비어 있어도 구분선과 점선 자리는 항상 보인다 — 4단계에서 이 아래가
+     "완료로 옮기는" 유일한 드롭 지점이라, 없으면 첫 프로젝트를 완료로 만들 수 없다. */
+.pproj-divider {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+  user-select: none;
+}
+.pproj-divider::before,
+.pproj-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.pproj-divider-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* 완료 영역이 비었을 때의 안내 겸 드롭 자리. .task-empty 보다 낮고 옅게. */
+.pproj-done-hint {
+  list-style: none;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* 완료 카드: 목록에서 빼지 않고 톤만 낮춰 진행 중과 구분한다.
+   opacity 로 통째로 흐리면 진도율 막대까지 읽기 어려워져, 배경·글자색으로만 구분한다. */
+.pproj-item.is-done {
+  background: #f7f8fa;
+  border-color: #eceef2;
+}
+.pproj-item.is-done .pproj-item-name {
+  color: var(--text-muted);
+}
+.pproj-item.is-done .pcat-badge {
+  opacity: 0.75;
+}
+.pproj-item.is-done:hover {
+  border-color: var(--primary);
+}
+/* 선택된 완료 카드: 위 .is-selected 규칙과 특정도가 같아 순서로 밀리므로 명시적으로 잡아준다 */
+.pproj-item.is-done.is-selected {
+  border-color: var(--primary);
+  background: rgba(59, 110, 240, 0.05);
+}
+
+/* ===== 순서 드래그 =====
+   카드 전체가 아니라 손잡이(⠿)만 잡는다 — 카드 클릭은 '선택'이라 부딪히기 때문. */
+.pproj-drag-handle {
+  flex-shrink: 0;
+  position: relative;
+  color: #c3c8d2;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+  /* ⚠ touch-action 을 주지 않는다. 주면 롱프레스 대기 중 스와이프가 스크롤로 넘어가지 못한다
+     (간트 막대·리사이저와 같은 규칙). */
+}
+/* 겉보기는 작게 두고 실제 잡는 영역만 40px 가까이 넓힌다(아이콘 버튼과 같은 방식) */
+.pproj-drag-handle::before {
+  content: "";
+  position: absolute;
+  inset: -12px -10px;
+}
+.pproj-drag-handle:hover {
+  color: var(--text-muted);
+}
+.pproj-list.is-dragging .pproj-drag-handle {
+  cursor: grabbing;
+}
+
+/* 끌고 있는 카드: 자리는 그대로 차지하되 '떠 있는' 느낌만 준다 */
+.pproj-item.is-dragging {
+  opacity: 0.9;
+  border-color: var(--primary);
+  border-style: dashed;
+  box-shadow: 0 6px 16px rgba(31, 36, 48, 0.14);
+}
+
+/* 완료 영역 위에 있을 때의 강조 — 지금 놓으면 완료가 된다는 신호 */
+.pproj-divider.is-drop-active::before,
+.pproj-divider.is-drop-active::after {
+  background: var(--primary);
+}
+.pproj-divider.is-drop-active .pproj-divider-label {
+  color: var(--primary);
+}
+.pproj-done-hint.is-drop-active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(59, 110, 240, 0.04);
+}
+
 /* 카테고리 배지 — 내부 키(data-cat)별 색상 매핑.
    개인용: research/lecture/study/daily · 팀 공용: research/work.
    기본값(아래 .pcat-badge)은 회색이라 정의되지 않은 옛 더미 값도 보이게 처리. */

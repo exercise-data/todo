@@ -4,6 +4,12 @@
 # 개발 작업 기록 (재정비 진행 메모 — 로컬에만 둔다)
 REBUILD_PLAN.md
 
+# 드래그 확인용 목업 페이지 (앱과 무관 — 로컬 개발용)
+drag-harness.html
+team-drag-harness.html
+data-harness.html
+_fakeFirebase.js
+
 # OS / 편집기 부산물
 Thumbs.db
 Desktop.ini

@@ -7,6 +7,11 @@
 //      기존 문서를 모두 지우고, id 를 새로 발급 + task.projectId 를 리매핑해 Firestore 에 기록.
 //      ※ 덮어쓰기이므로 반드시 confirm 으로 확인을 받는다.
 //
+// 프로젝트의 표시 순서(order)와 완료 영역 여부(done)도 함께 실어 나른다.
+// **배열 순서가 곧 표시 순서**라는 약속 하나로 굴러간다 — 내보낼 때 화면에 보이는 순서대로
+// 늘어놓고, 가져올 때 그 순서대로 번호를 다시 매긴다(projectOrder.js 의 assignSectionOrder).
+// 두 필드가 없는 옛 백업 파일은 "전부 진행 중 · 배열 순서대로" 로 들어와, 붙이기 전과 같다.
+//
 // scope 는 데이터 영역 단위다(개인 전체 / 특정 팀 전체) — 원본의 "구분(category)별 백업"과 다름.
 // 카테고리 값은 그대로 보존한다(개인=daily 또는 추가 id, 팀=research/work 또는 추가 id).
 // 다른 영역으로 교차 가져오기 시 카테고리가 그 탭의 필터와 안 맞을 수 있으나(회색 배지로 표시)
@@ -37,6 +42,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { describeError } from "./cloudErrors.js";
+// ⚠ 이 import 때문에 dataTransfer.js 도 "함께 배포해야 하는 파일" 묶음에 들어간다.
+//   projectOrder.js 가 빠지거나 캐시가 엇갈리면 백업 버튼이 통째로 죽는다.
+import { sortProjects, assignSectionOrder, isDone } from "./projectOrder.js";
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -162,18 +170,25 @@ async function exportArea(area) {
       getDocs(query(collection(db, TCOLL), where(field, "==", value))),
     ]);
 
-    // createdAt 순으로 정렬해 배열 순서 = 원래 순서가 되도록(가져오기 시 순서 보존)
-    const projects = projSnap.docs
-      .map((d) => {
-        const x = d.data();
-        return {
-          id: d.id,
-          name: x.name || "",
-          category: x.category || "",
-          createdAt: createdMillis(x.createdAt),
-        };
-      })
-      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    // 배열 순서 = 화면에 보이는 순서가 되도록 목록과 **똑같은 기준**으로 정렬한다
+    // (진행 중 먼저 → order → createdAt → id). 예전에는 createdAt 순이었는데, 그러면
+    // 드래그로 바꾼 순서가 백업에서 사라진다.
+    const projects = assignSectionOrder(
+      sortProjects(
+        projSnap.docs.map((d) => {
+          const x = d.data();
+          return {
+            id: d.id,
+            name: x.name || "",
+            category: x.category || "",
+            done: isDone(x),
+            order: x.order, // 정렬용 원본 값 — 아래에서 0..n-1 로 다시 매겨진다
+            doneAt: createdMillis(x.doneAt),
+            createdAt: createdMillis(x.createdAt),
+          };
+        })
+      )
+    );
 
     const tasks = taskSnap.docs
       .map((d) => {
@@ -283,15 +298,25 @@ function importAreaFromFile(area, file) {
       oldTask.forEach((d) => ops.push({ type: "delete", ref: d.ref }));
 
       // 2) id 재발급 + projectId 리매핑하여 새 문서 생성
+      // 파일의 배열 순서를 그대로 표시 순서로 읽어 영역별 0..n-1 을 매긴다.
+      // 옛 파일에는 done/order 가 없어 전부 진행 중 + 배열 인덱스가 된다(의도한 동작).
+      const orderedProjects = assignSectionOrder(baseProjects);
       const idMap = {};
-      baseProjects.forEach((p) => {
+      orderedProjects.forEach((p) => {
         const ref = doc(collection(db, PCOLL));
         idMap[p.id] = ref.id;
         const base = {
           name: (p.name || "").toString(),
           category: (p.category || "").toString(),
+          done: p.done,
+          order: p.order,
           createdAt: createdValue(p.createdAt),
         };
+        // doneAt 은 "완료였고 시각도 아는" 경우에만 싣는다. 모르면 필드를 아예 넣지 않는다
+        // — 지금 시각을 대신 넣으면 처음 완료한 시각을 복원이 덮어써 버린다.
+        if (p.done && typeof p.doneAt === "number" && isFinite(p.doneAt)) {
+          base.doneAt = Timestamp.fromMillis(p.doneAt);
+        }
         const data2 =
           area === "personal"
             ? { ownerUid: currentUid, ...base }

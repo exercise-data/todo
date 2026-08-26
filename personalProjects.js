@@ -37,6 +37,14 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { describeError } from "./cloudErrors.js";
+import {
+  compareProjects,
+  isDone,
+  computeDrop,
+  applyWrites,
+  orderWriteFields,
+} from "./projectOrder.js";
+import { attachProjectDrag } from "./projectDrag.js";
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -48,6 +56,8 @@ const USERS = "users"; // 추가 카테고리(extraCategories)를 보관하는 �
 const SELECT_EVENT = "personal-project-selected"; // personalTasks.js 로 선택 변경 통지
 // 개인용 기본 카테고리: 이제 "일상"(daily) 하나. 표시 이름(label) ↔ 내부 키(key) 분리(Firestore 에는 key 저장).
 // 추가 카테고리는 users/{uid}.extraCategories 에 사용자당 최대 3개까지 저장(personalCategories.js 가 관리).
+// 한 번의 writeBatch 에 담을 최대 개수. Firestore 한도는 500 이라 여유를 둔다.
+const ORDER_BATCH_LIMIT = 400;
 const CATEGORIES = [{ key: "daily", label: "일상" }];
 const CATEGORY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
 
@@ -71,6 +81,8 @@ let selectedId = null; // 선택된 프로젝트(세부 할일 조회에 사용)
 let currentFilter = "all"; // "all" | "daily" | 추가 카테고리 id
 let extraCategories = []; // 본인 추가 카테고리 [{id,name,color}] — users/{uid} 에서 읽음
 let userDocUnsub = null; // users/{uid} 문서 구독(추가 카테고리 실시간 반영)
+let isDraggingProjects = false; // 드래그 중에는 재렌더를 보류(끄는 카드가 DOM 에서 사라지지 않게)
+let pendingRender = false; // 보류된 렌더가 있었는지 — 드래그가 끝나면 한 번 몰아서 그린다
 
 // 기본 + 추가 카테고리를 합친 목록: [{key,label,color?}] (color 는 추가 카테고리에만)
 function allCategories() {
@@ -140,12 +152,6 @@ function clearMessage() {
   errorEl.classList.remove("is-info");
 }
 
-function createdMillis(p) {
-  const ts = p.createdAt;
-  if (ts && typeof ts.toMillis === "function") return ts.toMillis();
-  return Infinity;
-}
-
 // 선택된 프로젝트 변경을 personalTasks.js 에 알린다(모듈 간 통신).
 // 같은 값으로 다시 호출돼도 personalTasks 쪽에서 중복 구독을 막는다.
 function setSelected(id) {
@@ -211,8 +217,102 @@ function buildProgress({ total, done, percent }) {
   return wrap;
 }
 
+// ----- 프로젝트 카드 한 장 (진행 중·완료 영역 공용) -----
+function buildProjectItem(proj) {
+  const li = document.createElement("li");
+  li.className = "pproj-item" + (proj.id === selectedId ? " is-selected" : "");
+  if (isDone(proj)) li.classList.add("is-done"); // 완료 영역: 톤 다운 표시
+  li.dataset.id = proj.id;
+
+  if (editingId === proj.id) {
+    li.classList.add("is-editing");
+    li.append(buildEditForm(proj));
+    return li;
+  }
+
+  // 키보드로도 선택 가능하도록 항목 자체를 버튼처럼
+  li.tabIndex = 0;
+  li.setAttribute("role", "button");
+  li.setAttribute("aria-pressed", String(proj.id === selectedId));
+
+  const head = document.createElement("div");
+  head.className = "pproj-item-head";
+
+  // 끌기 손잡이. 카드 전체를 끌면 '선택' 클릭과 부딪히므로 잡는 곳을 따로 둔다.
+  // 포인터 전용 기능이라 포커스는 주지 않고 보조기술에서도 숨긴다(aria-hidden).
+  const handle = document.createElement("span");
+  handle.className = "pproj-drag-handle";
+  handle.dataset.action = "drag"; // 아래 클릭 위임에서 '선택'으로 새지 않게 막는 표식
+  handle.title = "끌어서 순서 변경 / 완료로 이동";
+  handle.setAttribute("aria-hidden", "true");
+  handle.textContent = "⠿";
+
+  const name = document.createElement("span");
+  name.className = "pproj-item-name";
+  name.textContent = proj.name;
+
+  const badge = document.createElement("span");
+  badge.className = "pcat-badge";
+  badge.dataset.cat = proj.category || "";
+  badge.textContent = labelFor(proj.category);
+  // 추가 카테고리는 CSS 매핑이 없으므로 자동 배정된 색을 인라인으로 적용
+  const badgeColor = colorFor(proj.category);
+  if (badgeColor) badge.style.background = badgeColor;
+
+  const actions = document.createElement("div");
+  actions.className = "pproj-actions";
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.className = "icon-btn";
+  editBtn.dataset.action = "edit";
+  editBtn.title = "수정";
+  editBtn.textContent = "✎";
+  const delBtn = document.createElement("button");
+  delBtn.type = "button";
+  delBtn.className = "icon-btn icon-btn-danger";
+  delBtn.dataset.action = "delete";
+  delBtn.title = "삭제";
+  delBtn.textContent = "🗑";
+  actions.append(editBtn, delBtn);
+
+  head.append(handle, name, badge, actions);
+  li.append(head);
+
+  // 진도율: 즉석 계산(저장 안 함) — "N% (done/total)" + 막대 + role=progressbar
+  li.append(buildProgress(getProgress(proj.id)));
+
+  return li;
+}
+
+// ----- 완료 영역 구분선 -----
+// ⚠ 완료 영역이 비어 있어도 항상 렌더한다. 4단계에서 "완료로 옮기기"는 오직 이 선 아래로
+//   끌어 놓는 것뿐이라, 선이 없으면 첫 프로젝트를 완료로 만들 방법이 사라진다.
+function buildDoneDivider(count) {
+  const li = document.createElement("li");
+  li.className = "pproj-divider";
+  const label = document.createElement("span");
+  label.className = "pproj-divider-label";
+  label.textContent = count > 0 ? `완료 (${count})` : "완료";
+  li.append(label);
+  return li;
+}
+
+// 완료 영역이 비었을 때의 안내 겸 드롭 자리(점선 박스). 최소 높이는 CSS 가 준다.
+function buildDoneHint() {
+  const li = document.createElement("li");
+  li.className = "pproj-done-hint";
+  li.textContent = "완료한 프로젝트를 여기로 끌어 놓으세요";
+  return li;
+}
+
 // ----- 목록 렌더 -----
 function renderPersonalProjects() {
+  // 드래그 중에 다시 그리면 끌고 있던 카드가 통째로 교체돼 드래그가 끊긴다(간트에서 겪은 함정).
+  // 스냅샷이 와도 여기서 막고, 드롭 직후에 한 번만 그린다.
+  if (isDraggingProjects) {
+    pendingRender = true;
+    return;
+  }
   listEl.innerHTML = "";
   renderDetailHeader();
 
@@ -224,9 +324,10 @@ function renderPersonalProjects() {
   // 카테고리 필터 적용
   const visible = projectsCache
     .filter((p) => currentFilter === "all" || p.category === currentFilter)
-    .sort((a, b) => createdMillis(a) - createdMillis(b));
+    .sort(compareProjects); // 진행 중 먼저 → order → createdAt → id (projectOrder.js)
 
   if (visible.length === 0) {
+    // 보이는 프로젝트가 하나도 없으면 구분선도 띄우지 않는다(끌어 놓을 대상 자체가 없음)
     listEl.append(
       emptyRow(
         currentFilter === "all"
@@ -237,62 +338,23 @@ function renderPersonalProjects() {
     return;
   }
 
-  visible.forEach((proj) => {
-    const li = document.createElement("li");
-    li.className = "pproj-item" + (proj.id === selectedId ? " is-selected" : "");
-    li.dataset.id = proj.id;
+  // 두 영역으로 나눈다. visible 은 이미 compareProjects 로 정렬돼 있어
+  // (진행 중 먼저 → order) 각 영역 '안'의 순서는 그대로 유지된다.
+  const active = visible.filter((p) => !isDone(p));
+  const done = visible.filter((p) => isDone(p));
 
-    if (editingId === proj.id) {
-      li.classList.add("is-editing");
-      li.append(buildEditForm(proj));
-      listEl.append(li);
-      return;
-    }
+  if (active.length === 0) {
+    listEl.append(emptyRow("진행 중인 프로젝트가 없습니다."));
+  } else {
+    active.forEach((proj) => listEl.append(buildProjectItem(proj)));
+  }
 
-    // 키보드로도 선택 가능하도록 항목 자체를 버튼처럼
-    li.tabIndex = 0;
-    li.setAttribute("role", "button");
-    li.setAttribute("aria-pressed", String(proj.id === selectedId));
-
-    const head = document.createElement("div");
-    head.className = "pproj-item-head";
-
-    const name = document.createElement("span");
-    name.className = "pproj-item-name";
-    name.textContent = proj.name;
-
-    const badge = document.createElement("span");
-    badge.className = "pcat-badge";
-    badge.dataset.cat = proj.category || "";
-    badge.textContent = labelFor(proj.category);
-    // 추가 카테고리는 CSS 매핑이 없으므로 자동 배정된 색을 인라인으로 적용
-    const badgeColor = colorFor(proj.category);
-    if (badgeColor) badge.style.background = badgeColor;
-
-    const actions = document.createElement("div");
-    actions.className = "pproj-actions";
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "icon-btn";
-    editBtn.dataset.action = "edit";
-    editBtn.title = "수정";
-    editBtn.textContent = "✎";
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.className = "icon-btn icon-btn-danger";
-    delBtn.dataset.action = "delete";
-    delBtn.title = "삭제";
-    delBtn.textContent = "🗑";
-    actions.append(editBtn, delBtn);
-
-    head.append(name, badge, actions);
-    li.append(head);
-
-    // 진도율: 즉석 계산(저장 안 함) — "N% (done/total)" + 막대 + role=progressbar
-    li.append(buildProgress(getProgress(proj.id)));
-
-    listEl.append(li);
-  });
+  listEl.append(buildDoneDivider(done.length));
+  if (done.length === 0) {
+    listEl.append(buildDoneHint());
+  } else {
+    done.forEach((proj) => listEl.append(buildProjectItem(proj)));
+  }
 }
 
 // 진도율 계산용: 내 모든 personalTasks 를 구독해 projectId 별 완료/전체 수를 집계.
@@ -451,7 +513,9 @@ listEl.addEventListener("click", async (e) => {
   const actionEl = e.target.closest("[data-action]");
   const action = actionEl ? actionEl.dataset.action : null;
 
-  if (action === "edit") {
+  if (action === "drag") {
+    return; // 손잡이 클릭(끌기 끝난 뒤의 click 포함) — 선택으로 넘기지 않는다
+  } else if (action === "edit") {
     editingId = id;
     clearMessage();
     renderPersonalProjects();
@@ -521,6 +585,58 @@ listEl.addEventListener("submit", async (e) => {
     showError("수정에 실패했습니다: " + describeError(e2));
   }
 });
+
+// ----- 순서 드래그 -----
+// 놓은 자리를 computeDrop 이 쓰기 목록으로 바꾸고, 바뀐 문서만 batch 로 저장한다.
+attachProjectDrag({
+  listEl,
+  // 수정 폼이 열려 있으면 입력 중 카드가 움직이지 않도록 잠근다
+  isEnabled: () => !!currentUid && editingId === null,
+  onDragStateChange: (dragging) => {
+    isDraggingProjects = dragging;
+    if (!dragging && pendingRender) {
+      pendingRender = false;
+      renderPersonalProjects();
+    }
+  },
+  onDrop: async (drop) => {
+    const writes = computeDrop(projectsCache, drop);
+    if (writes.length === 0) return;
+
+    // 저장을 기다리지 않고 화면부터 새 순서로 바꾼다(낙관적 반영).
+    // 실패하면 아래에서 되돌리고, 성공하면 곧 도착하는 스냅샷이 같은 결과로 덮어쓴다.
+    const prev = projectsCache;
+    const optimistic = applyWrites(prev, writes);
+    projectsCache = optimistic;
+    renderPersonalProjects();
+
+    try {
+      await saveOrder(writes, prev);
+      clearMessage();
+    } catch (err) {
+      console.error("순서 저장 실패:", err);
+      // 그 사이 새 스냅샷이 왔다면 그쪽이 진실이므로 건드리지 않는다
+      if (projectsCache === optimistic) projectsCache = prev;
+      renderPersonalProjects();
+      showError("순서를 저장하지 못했습니다: " + describeError(err));
+    }
+  },
+});
+
+// 바뀐 문서만 batch 로 기록한다.
+// doneAt 은 '완료 여부가 실제로 바뀐 문서'에만 쓴다 — 매번 덮으면 순서만 바꿔도
+// 처음 완료한 시각이 사라진다.
+async function saveOrder(writes, before) {
+  const wasDone = new Map((before || []).map((p) => [p.id, isDone(p)]));
+  for (let i = 0; i < writes.length; i += ORDER_BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    writes.slice(i, i + ORDER_BATCH_LIMIT).forEach((w) => {
+      const data = orderWriteFields(w, wasDone.get(w.id), serverTimestamp());
+      batch.update(doc(db, COLLECTION, w.id), data);
+    });
+    await batch.commit();
+  }
+}
 
 // ----- 실시간 구독 -----
 function subscribe(uid) {
