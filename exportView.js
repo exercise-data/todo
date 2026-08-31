@@ -17,6 +17,25 @@
 const EXPORT_SCALE = 2; // 선명도를 위해 2배 해상도로 래스터화
 const EXPORT_PAD = 16; // 카드 내부 여백(px)
 
+// 캔버스 상한. 브라우저가 이보다 큰 캔버스를 만들면 예외 없이 '빈 캔버스'가 되어
+// 하얀 이미지가 저장된다(간트 범위가 넓은 상태에서 확대까지 켜면 실제로 닿는다).
+// 크로미움 기준 한 변 16384px · 넓이 16384² 를 보수적으로 쓴다.
+const MAX_CANVAS_DIM = 16384;
+const MAX_CANVAS_AREA = MAX_CANVAS_DIM * MAX_CANVAS_DIM;
+
+// 상한에 걸리면 선명도를 한 단계 낮춘다(2배 → 1배). 1배로도 안 들어가면 0 을 돌려
+// 호출한 쪽이 "빈 이미지를 저장하는 대신" 안내하고 멈추게 한다.
+function resolveExportScale(cssW, cssH) {
+  for (let scale = EXPORT_SCALE; scale >= 1; scale--) {
+    const w = cssW * scale;
+    const h = cssH * scale;
+    if (w <= MAX_CANVAS_DIM && h <= MAX_CANVAS_DIM && w * h <= MAX_CANVAS_AREA) {
+      return scale;
+    }
+  }
+  return 0;
+}
+
 // 파일명에 쓸 수 없는 문자를 _ 로 치환
 function sanitizeFilename(name) {
   return (name || "export").replace(/[\\/:*?"<>|]/g, "_").trim() || "export";
@@ -166,9 +185,22 @@ function rasterizeCard(card) {
     const inner = new XMLSerializer().serializeToString(card);
     document.body.removeChild(card);
 
+    // 캔버스 상한을 넘으면 선명도를 낮춰서라도 그린다. 1배로도 안 들어가면 여기서 멈춘다
+    // — 그대로 진행하면 하얗기만 한 파일이 저장되기 때문이다.
+    const scale = resolveExportScale(cssW, cssH);
+    if (scale === 0) {
+      const err = new Error(`export canvas too large: ${cssW}x${cssH}`);
+      // userMessage 가 붙은 오류만 그대로 사용자에게 보여준다(아래 exportPanel 참고).
+      err.userMessage =
+        "내보낼 범위가 너무 넓어 이미지로 만들 수 없습니다.\n" +
+        "간트 확대를 낮추거나 표시 기간을 좁힌 뒤 다시 시도해 주세요.";
+      reject(err);
+      return;
+    }
+
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${cssW * EXPORT_SCALE}" ` +
-      `height="${cssH * EXPORT_SCALE}" viewBox="0 0 ${cssW} ${cssH}">` +
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${cssW * scale}" ` +
+      `height="${cssH * scale}" viewBox="0 0 ${cssW} ${cssH}">` +
       `<foreignObject x="0" y="0" width="${cssW}" height="${cssH}">` +
       `<div xmlns="http://www.w3.org/1999/xhtml">${inner}</div>` +
       `</foreignObject></svg>`;
@@ -176,8 +208,8 @@ function rasterizeCard(card) {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = cssW * EXPORT_SCALE;
-      canvas.height = cssH * EXPORT_SCALE;
+      canvas.width = cssW * scale;
+      canvas.height = cssH * scale;
       const ctx = canvas.getContext("2d");
       ctx.fillStyle = "#ffffff"; // 배경 흰색
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -345,7 +377,11 @@ async function exportPanel(root, format) {
     }
   } catch (err) {
     console.error("내보내기 실패:", err);
-    alert("내보내기에 실패했습니다. 브라우저 콘솔을 확인하세요.");
+    alert(
+      err && err.userMessage
+        ? err.userMessage
+        : "내보내기에 실패했습니다. 브라우저 콘솔을 확인하세요."
+    );
   }
 }
 
