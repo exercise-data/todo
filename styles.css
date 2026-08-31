@@ -268,12 +268,6 @@ body[data-auth="in"] .auth-screen {
   width: auto;
 }
 
-/* 데이터 도구 버튼은 작게 */
-.data-tools .btn {
-  padding: 4px 10px;
-  font-size: 0.78rem;
-}
-
 .data-tools-hint {
   max-width: 360px;
   text-align: right;
@@ -750,11 +744,6 @@ body[data-auth="in"] .auth-screen {
 .export-label {
   font-size: 0.8rem;
   color: var(--text-muted);
-}
-
-.export-btn {
-  padding: 5px 12px;
-  font-size: 0.82rem;
 }
 
 /* 빈 상태 안내 문구 */
@@ -2191,11 +2180,6 @@ body[data-view-mode="manage"] .team-manage-screen {
 .data-tools-btns {
   display: flex;
   gap: 4px;
-}
-.data-tools .btn {
-  padding: 3px 8px;
-  font-size: 0.72rem;
-  white-space: nowrap;
 }
 /* 화면 모드별 토글: 개인용에서는 팀 데이터 숨김, 팀 공용에서는 개인 데이터 숨김 */
 body[data-view-mode="personal"] .team-data-tools {
