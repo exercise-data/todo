@@ -246,12 +246,6 @@ body[data-auth="in"] .auth-screen {
   font-size: 1.4rem;
 }
 
-.data-cat-select {
-  padding: 4px 8px;
-  font-size: 0.78rem;
-  width: auto;
-}
-
 .category-tabs {
   display: flex;
   gap: 8px;
