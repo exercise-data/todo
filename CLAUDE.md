@@ -57,8 +57,11 @@
 - 구글 팝업 로그인이라 에이전트가 실계정으로 확인할 수 없다. 그래서 **로컬 전용 하네스**를
   쓴다(전부 `.gitignore` — 저장소 루트가 그대로 배포되므로 커밋하면 같이 올라간다):
   `drag-harness.html`(개인 드래그) · `team-drag-harness.html`(팀) · `data-harness.html`(백업)
-  · `_fakeFirebase.js`(가짜 Firestore). import map 으로 gstatic 의 firebase 세 URL 만
-  가짜로 돌려서 **앱 모듈은 고치지 않은 진짜 파일**이 그대로 돈다.
+  · `gantt-harness.html`(간트 렌더 — `?area=team` 이면 팀) · `_fakeFirebase.js`(가짜 Firestore).
+  import map 으로 gstatic 의 firebase 세 URL 만 가짜로 돌려서
+  **앱 모듈은 고치지 않은 진짜 파일**이 그대로 돈다.
+- ⚠ **새 하네스를 만들면 `.gitignore` 에 먼저 넣을 것** — 저장소 루트가 그대로 배포된다.
+  그리고 모듈보다 먼저 `window.__harnessReady = false` 를 심을 것(드라이버가 이걸 기다린다).
 - Chrome 확장이 안 붙어도 검증할 수 있다 — 헤드리스 Chrome 을 CDP 로 직접 몰면 된다.
   함정 둘: `--user-data-dir` 에 **절대경로**(상대경로면 원격 디버깅을 거부한다) ·
   `--disable-background-timer-throttling --disable-renderer-backgrounding
