@@ -60,8 +60,9 @@ const COLLS = {
 };
 
 // ----- DOM 참조 -----
-// 데이터 버튼은 상단 헤더(.header-data-tools)로 옮겨졌으므로 문서 전역에서 조회한다
-// (클래스명이 고유해 충돌 없음). 팀 선택 <select> 는 여전히 .team-screen 안에 있다.
+// 데이터 버튼은 상단 헤더의 드롭다운(.personal-data-tools / .team-data-tools)에 있어
+// 화면 컨테이너 밖이므로 문서 전역에서 조회한다(클래스명이 고유해 충돌 없음).
+// 팀 선택 <select> 는 여전히 .team-screen 안에 있다.
 const pExportBtn = document.querySelector(".pdata-export");
 const pImportBtn = document.querySelector(".pdata-import");
 const pFileInput = document.querySelector(".pdata-file");

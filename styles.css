@@ -246,33 +246,10 @@ body[data-auth="in"] .auth-screen {
   font-size: 1.4rem;
 }
 
-/* 데이터 백업·복원 도구 (헤더 우측 정렬, 구분별 독립) */
-.data-tools {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  margin-left: auto; /* 우측 끝으로 밀착 */
-}
-
-/* 구분 선택 + 내보내기/가져오기 한 줄 */
-.data-tools-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .data-cat-select {
   padding: 4px 8px;
   font-size: 0.78rem;
   width: auto;
-}
-
-.data-tools-hint {
-  max-width: 360px;
-  text-align: right;
-  font-size: 0.74rem;
-  color: var(--text-muted);
 }
 
 .category-tabs {
@@ -2154,33 +2131,6 @@ body[data-view-mode="manage"] .team-manage-screen {
   overflow-y: auto;
 }
 
-/* 7단계) 데이터 백업/복원 — 상단 헤더 우측에 컴팩트 배치(라벨 아래 버튼 2개).
-   현재 화면 모드에 따라 개인/팀 중 하나만 표시. */
-.header-data-tools {
-  display: flex;
-  align-items: center;
-}
-.data-tools {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 3px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-}
-.data-tools-label {
-  font-size: 0.66rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-.data-tools-btns {
-  display: flex;
-  gap: 4px;
-}
 /* 화면 모드별 토글: 개인용에서는 팀 데이터 숨김, 팀 공용에서는 개인 데이터 숨김 */
 body[data-view-mode="personal"] .team-data-tools {
   display: none;
