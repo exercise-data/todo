@@ -102,10 +102,22 @@ function buildExportCard(view, listEl, ganttEl, projectName, rangeLabel, ganttTo
       .forEach((el) => el.remove());
   }
 
-  // 주말/공휴일 범례는 가로 스크롤에 밀리지 않도록 스크롤 박스 '밖'의 고정 도구막대로 옮겼다.
-  // 그래서 ganttEl 복제본에는 안 들어온다 → 도구막대에서 따로 복제해 차트 아래에 되붙인다.
-  // (도구막대의 나머지 컨트롤은 내보내기 대상이 아니므로 범례만 골라 온다.)
+  // 안내 문구(.gantt-notes)와 주말/공휴일 범례(.gantt-legend)는 가로 스크롤에 밀리지 않도록
+  // 스크롤 박스 '밖'의 고정 도구막대로 옮겼다. 그래서 ganttEl 복제본에는 안 들어온다
+  // → 도구막대에서 따로 복제해 차트 아래에 되붙인다. 순서는 화면과 같게 안내 문구 → 범례.
+  // (도구막대의 나머지 컨트롤은 내보내기 대상이 아니므로 이 둘만 골라 온다.)
   if (view === "gantt" && ganttToolbarEl) {
+    const liveNotes = ganttToolbarEl.querySelector(".gantt-notes");
+    if (liveNotes) {
+      const notesClone = liveNotes.cloneNode(true);
+      inlineStylesFromLive(liveNotes, notesClone);
+      // 도구막대에선 margin:0 → 카드에선 범례와 같은 여백을 준다
+      notesClone.style.margin = "10px";
+      // 범례와 같은 이유로 폭은 내용에 맞게 다시 잡히도록 풀어 준다(래스터화 시 글자 폭 차이)
+      notesClone.style.width = "auto";
+      clone.append(notesClone);
+    }
+
     const liveLegend = ganttToolbarEl.querySelector(".gantt-legend");
     if (liveLegend) {
       const legendClone = liveLegend.cloneNode(true);

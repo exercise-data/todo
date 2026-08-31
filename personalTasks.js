@@ -343,6 +343,20 @@ function ganttMessage(text) {
   return p;
 }
 
+// 안내 문구를 스크롤 박스(ganttEl)가 아니라 그 위 고정 도구막대에 붙인다.
+// 안에 넣으면 날짜를 보려고 오른쪽으로 스크롤할 때 문구가 왼쪽으로 밀려 사라진다
+// — 범례를 도구막대로 옮긴 것과 같은 이유다(범례만 옮기고 이건 남아 있었다).
+// 문구 개수(숨겨진 N개·기간 없는 N개)는 차트를 다 그린 뒤에야 알 수 있어, 렌더 중에는
+// 모아 두었다가 마지막에 한 번에 붙인다.
+// ⚠ 도구막대는 ganttEl 복제에 안 실리므로 exportView.js 가 .gantt-notes 를 따로 복제한다.
+function appendGanttNotes(notes) {
+  if (!notes.length) return;
+  const box = document.createElement("div");
+  box.className = "gantt-notes";
+  notes.forEach((t) => box.append(ganttMessage(t)));
+  ganttToolbarEl.append(box);
+}
+
 // 종료일까지 남은 일수(날짜 단위). endDate 없으면 null.
 function daysUntil(endDate) {
   if (!endDate) return null;
@@ -763,19 +777,20 @@ function renderGantt() {
   // — 안에 넣으면 가로 스크롤에 딸려 화면 밖으로 밀려난다.
   ganttToolbarEl.append(buildGanttControls());
 
+  // 안내 문구는 여기서 모아 두었다가 마지막에 도구막대에 붙인다(appendGanttNotes 참고).
+  const notes = [];
+
   // 그릴 막대가 없어도 축(빈 차트)은 그린다 — 안내만 위에 덧붙인다.
   // (예전엔 여기서 return 해 차트가 아예 없었다. 이제 '오늘 ±여유' 축이라도 보여야
   //  범위 감각이 생기고, 할 일을 추가하면 곧바로 그 축 위에 막대가 얹힌다.)
   if (visibleTasks.length === 0) {
-    let msg;
     if (all.length === 0) {
-      msg = "이 프로젝트에 할 일이 없습니다. 추가하면 간트차트에 표시됩니다.";
+      notes.push("이 프로젝트에 할 일이 없습니다. 추가하면 간트차트에 표시됩니다.");
     } else if (dated.length === 0) {
-      msg = "기간(시작일·종료일)이 입력된 할 일이 없습니다.";
+      notes.push("기간(시작일·종료일)이 입력된 할 일이 없습니다.");
     } else {
-      msg = "선택한 기간에 표시할 할 일이 없습니다. 기간을 조정하세요.";
+      notes.push("선택한 기간에 표시할 할 일이 없습니다. 기간을 조정하세요.");
     }
-    ganttEl.append(ganttMessage(msg));
   }
 
   const grid = document.createElement("div");
@@ -902,24 +917,22 @@ function renderGantt() {
 
   ganttEl.append(grid);
 
-  // (주말/공휴일 범례는 여기서 그리지 않는다 — 가로 스크롤에 밀리지 않도록
-  //  buildGanttControls() 안에서 고정 도구막대에 붙인다.)
+  // (주말/공휴일 범례도, 아래 안내 문구도 여기서 그리지 않는다 — 가로 스크롤에 밀리지
+  //  않도록 둘 다 스크롤 박스 밖의 고정 도구막대에 붙인다.)
 
   if (hiddenByRange > 0) {
-    ganttEl.append(
-      ganttMessage(
-        `설정한 표시 기간을 벗어나 숨겨진 할 일 ${hiddenByRange}개가 있습니다.`
-      )
+    notes.push(
+      `설정한 표시 기간을 벗어나 숨겨진 할 일 ${hiddenByRange}개가 있습니다.`
     );
   }
 
   if (undated > 0) {
-    ganttEl.append(
-      ganttMessage(
-        `기간이 비어 차트에 표시되지 않은 할 일 ${undated}개가 있습니다.`
-      )
+    notes.push(
+      `기간이 비어 차트에 표시되지 않은 할 일 ${undated}개가 있습니다.`
     );
   }
+
+  appendGanttNotes(notes);
 }
 
 // ----- 보기 전환 (목록 / 간트) -----

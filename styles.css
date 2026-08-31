@@ -1077,6 +1077,21 @@ body[data-auth="in"] .auth-screen {
   background: rgba(59, 110, 240, 0.4);
 }
 
+/* 간트 안내 문구 묶음 — 스크롤 박스 밖 도구막대의 '다음 줄' 을 통째로 차지한다.
+   (스크롤 박스 안에 두면 가로 스크롤에 딸려 화면 밖으로 밀려난다 — 범례와 같은 이유)
+   .list-toolbar 가 flex-wrap 이라 width:100% 면 컨트롤 줄 아래로 내려간다. */
+.gantt-notes {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* 도구막대 안에서는 바깥여백 없음 — 줄 간격은 위 gap 이 맡는다(.gantt-hint 와 같은 규칙).
+   내보내기 카드에선 exportView.js 가 예전처럼 margin 을 도로 준다. */
+.gantt-notes .gantt-note {
+  margin: 0;
+}
+
 .gantt-note {
   margin: 10px;
   font-size: 0.82rem;
